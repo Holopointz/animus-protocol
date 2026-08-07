@@ -102,6 +102,7 @@ ASTEROIDS.Game = class Game {
         
         // Sound initialized flag
         this.soundStarted = false;
+        this.levelPendingSpawn = false; // guards double-nextLevel skip
 
         // Free-look camera orbit around ship
         this.lookYaw = 0;
@@ -567,10 +568,12 @@ ASTEROIDS.Game = class Game {
         this.lootManager.checkCollisions(this.player);
         
         // Check level progression
-        if (!this.level.isTransitioning() && this.asteroidManager.count() === 0) {
+        if (!this.levelPendingSpawn && !this.level.isTransitioning() && this.asteroidManager.count() === 0) {
             const hasNext = this.level.nextLevel();
             if (hasNext) {
+                this.levelPendingSpawn = true;
                 setTimeout(() => {
+                    this.levelPendingSpawn = false;
                     this.spawnAsteroids();
                     this.hud.showLevelName(this.level.getName(), this.level.getCurrentLevelNumber());
                     this.hud.showAniIntro();
@@ -804,6 +807,7 @@ ASTEROIDS.Game = class Game {
         this.soundStarted = true;
         
         this.state = 'playing';
+        this.levelPendingSpawn = false;
         this.spawnAsteroids();
         
         setTimeout(function() {

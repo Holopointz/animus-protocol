@@ -50,6 +50,7 @@ ASTEROIDS.Sound = (function() {
     var ambientGainNode = null;
     var ambientSynthNodes = [];
     var typingSource = null;
+    var typingRequestId = 0;
 
     function init() {
         if (initialized) return;
@@ -516,13 +517,15 @@ ASTEROIDS.Sound = (function() {
         if (!buffers['typing'] && !loading['typing']) {
             loadBuffer('typing', SAMPLE_MAP['typing']);
         }
+        var requestId = ++typingRequestId;
         var tries = 0;
         function attempt() {
+            if (requestId !== typingRequestId) return; // cancelled by stopTyping()
             var h = playBuffer('typing', { loop: true, volume: 0.22 });
             if (h) {
                 stopTyping();
                 typingSource = h.source;
-                typingSource.onended = function() { typingSource = null; };
+                typingSource.onended = function() { if (typingSource === h.source) typingSource = null; };
             } else if (loading['typing'] && tries++ < 5) {
                 setTimeout(attempt, 200);
             }
@@ -531,6 +534,7 @@ ASTEROIDS.Sound = (function() {
     }
 
     function stopTyping() {
+        typingRequestId++; // invalidate any pending start/retry
         if (typingSource) {
             try { typingSource.stop(); } catch (e) {}
             typingSource = null;

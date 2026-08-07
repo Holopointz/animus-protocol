@@ -186,7 +186,7 @@ ASTEROIDS.HUD = class HUD {
             'background:rgba(0,10,20,0.8)', 'flex:0 0 auto'
         ].join(';');
         var avatarImg = document.createElement('img');
-        avatarImg.src = 'assets/textures/ani.gif?v=17';
+        avatarImg.src = 'assets/textures/ani.gif?v=18';
         avatarImg.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
         avatarWrap.appendChild(avatarImg);
         this.aniIntroEl.appendChild(avatarWrap);
