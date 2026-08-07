@@ -147,6 +147,7 @@ ASTEROIDS.CONFIG = {
     },
 
     PLANET_GLOW_COLORS: {
+        'Sun': 0xffcc44,
         'Mercury': 0x888888,
         'Venus': 0xff9944,
         'Earth': 0x4488ff,

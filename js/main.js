@@ -690,7 +690,7 @@ ASTEROIDS.Game = class Game {
     }
     
     checkPlayerAsteroidCollisions() {
-        if (this.player.isInvulnerable()) return;
+        if (this.player.dead || this.player.isInvulnerable()) return;
         
         const asteroids = this.asteroidManager.getAsteroids();
         const playerPos = this.player.getPosition();
@@ -712,6 +712,10 @@ ASTEROIDS.Game = class Game {
                 this.createShieldFlash(playerPos, playerRadius);
                 
                 const destroyed = this.player.takeDamage(20);
+                // Push the ship away and grant a short grace window so an
+                // overlapping rock can't chain 20-damage hits every frame.
+                this.player.velocity.addScaledVector(collisionNormal, 10.0);
+                this.player.invulnerable = Math.max(this.player.invulnerable, 0.75);
                 var shakeConfig = ASTEROIDS.CONFIG.VISUAL;
                 this.cameraShake.intensity = shakeConfig.CAMERA_SHAKE_INTENSITY || 1.0;
                 this.cameraShake.duration = shakeConfig.CAMERA_SHAKE_DURATION || 0.3;

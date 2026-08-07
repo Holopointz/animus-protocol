@@ -14,6 +14,7 @@ ASTEROIDS.Player = class Player {
         this.shield = ASTEROIDS.CONFIG.PLAYER.SHIELD_MAX;
         this.hull = ASTEROIDS.CONFIG.PLAYER.HULL_MAX;
         this.lives = ASTEROIDS.CONFIG.PLAYER.LIVES;
+        this.dead = false;
         this.score = 0;
 
         // Timers
@@ -166,6 +167,7 @@ ASTEROIDS.Player = class Player {
         this.shield = ASTEROIDS.CONFIG.PLAYER.SHIELD_MAX;
         this.hull = ASTEROIDS.CONFIG.PLAYER.HULL_MAX;
         this.invulnerable = ASTEROIDS.CONFIG.PLAYER.RESPAWN_INVULNERABILITY;
+        this.dead = false;
         this.boostCooldown = 0;
         this.foodBuffTimer = 0;
         this.boosting = false;
@@ -599,6 +601,7 @@ ASTEROIDS.Player = class Player {
 
     die() {
         this.lives--;
+        this.dead = true;
         for (var i = 0; i < 36; i++) {
             var color = Math.random() > 0.5 ? 0xff6600 : 0xffff00;
             this.createParticleDead(color);
