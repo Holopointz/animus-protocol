@@ -29,6 +29,7 @@ ASTEROIDS.Sound = (function() {
         engine: 'engine.wav',
         ui_start: 'ui_start.wav',
         menu_click: 'menu_click.wav',
+        typing: 'typing.wav',
         ui_pause: 'ui_pause.wav',
         ui_gameover: 'ui_gameover.wav',
         ui_win: 'ui_win.wav',
@@ -48,6 +49,7 @@ ASTEROIDS.Sound = (function() {
     var ambientSource = null;
     var ambientGainNode = null;
     var ambientSynthNodes = [];
+    var typingSource = null;
 
     function init() {
         if (initialized) return;
@@ -507,6 +509,34 @@ ASTEROIDS.Sound = (function() {
         if (masterGain) masterGain.gain.value = muted ? 0 : 0.85;
     }
 
+    function startTyping() {
+        ensureContext();
+        if (!audioCtx || muted) return;
+        // Ensure the typing sample kicks off even if fetch/decode is still in flight
+        if (!buffers['typing'] && !loading['typing']) {
+            loadBuffer('typing', SAMPLE_MAP['typing']);
+        }
+        var tries = 0;
+        function attempt() {
+            var h = playBuffer('typing', { loop: true, volume: 0.22 });
+            if (h) {
+                stopTyping();
+                typingSource = h.source;
+                typingSource.onended = function() { typingSource = null; };
+            } else if (loading['typing'] && tries++ < 5) {
+                setTimeout(attempt, 200);
+            }
+        }
+        attempt();
+    }
+
+    function stopTyping() {
+        if (typingSource) {
+            try { typingSource.stop(); } catch (e) {}
+            typingSource = null;
+        }
+    }
+
     /** Drop-in helper: play any logical key from SAMPLE_MAP (for future SFX). */
     function play(key, opts) {
         return playBuffer(key, opts || {});
@@ -532,6 +562,8 @@ ASTEROIDS.Sound = (function() {
         // UI
         menuClick: menuClick,
         uiStart: uiStart,
+        startTyping: startTyping,
+        stopTyping: stopTyping,
         uiPause: uiPause,
         uiGameOver: uiGameOver,
         uiWin: uiWin,

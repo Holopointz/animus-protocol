@@ -168,6 +168,54 @@ ASTEROIDS.HUD = class HUD {
             'border-radius:50%', 'opacity:0.5'
         ].join(';');
         this.hudDiv.appendChild(this.crosshair);
+
+        // Ani intro dialogue (lower-left avatar + typewriter)
+        this.aniIntroEl = document.createElement('div');
+        this.aniIntroEl.id = 'ani-intro';
+        this.aniIntroEl.style.cssText = [
+            'position:absolute', 'left:28px', 'bottom:96px', 'display:none',
+            'align-items:flex-end', 'gap:16px', 'max-width:580px',
+            'z-index:18', 'pointer-events:none',
+            'opacity:1', 'transition:opacity 0.45s ease'
+        ].join(';');
+        var avatarWrap = document.createElement('div');
+        avatarWrap.style.cssText = [
+            'width:176px', 'height:176px', 'border-radius:18px', 'overflow:hidden',
+            'border:2px solid rgba(0,255,220,0.75)',
+            'box-shadow:0 0 22px rgba(0,220,255,0.45), inset 0 0 18px rgba(0,80,120,0.25)',
+            'background:rgba(0,10,20,0.8)', 'flex:0 0 auto'
+        ].join(';');
+        var avatarImg = document.createElement('img');
+        avatarImg.src = 'assets/textures/ani.gif?v=17';
+        avatarImg.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+        avatarWrap.appendChild(avatarImg);
+        this.aniIntroEl.appendChild(avatarWrap);
+
+        this.aniBubbleEl = document.createElement('div');
+        this.aniBubbleEl.style.cssText = [
+            'position:relative', 'max-width:360px', 'padding:18px 22px',
+            'border-radius:18px',
+            'border:1px solid rgba(0,255,220,0.55)',
+            'background:linear-gradient(160deg, rgba(0,16,30,0.88), rgba(0,8,16,0.9))',
+            'box-shadow:0 0 30px rgba(0,180,255,0.2), inset 0 0 22px rgba(0,80,140,0.12)',
+            'backdrop-filter:blur(6px)'
+        ].join(';');
+        var aniName = document.createElement('div');
+        aniName.style.cssText = [
+            'font-size:12px', 'font-weight:700', 'letter-spacing:0.22em',
+            'color:#7dffef', 'margin-bottom:8px', 'text-transform:uppercase'
+        ].join(';');
+        aniName.textContent = 'ANI';
+        this.aniBubbleEl.appendChild(aniName);
+        this.aniText = document.createElement('div');
+        this.aniText.style.cssText = [
+            'font-size:15px', 'line-height:1.6', 'color:#dff9ff',
+            'font-weight:500', 'text-shadow:0 0 8px rgba(0,0,0,0.8)'
+        ].join(';');
+        this.aniBubbleEl.appendChild(this.aniText);
+        this.aniIntroEl.appendChild(this.aniBubbleEl);
+        this.hudDiv.appendChild(this.aniIntroEl);
+        this._aniIntroTimer = null;
     }
 
     _ctrlRow(key, label) {
@@ -271,6 +319,42 @@ ASTEROIDS.HUD = class HUD {
             effectsHTML += '<span style="color:#ffff66">INVULN ' + player.invulnerable.toFixed(1) + 's</span>';
         }
         this.effectsEl.innerHTML = effectsHTML;
+    }
+
+    showAniIntro() {
+        var self = this;
+        if (!this.aniIntroEl) return;
+        var message = "This is the ANIMUS, is anybody out there? Current trajectory is an asteroid field, I've got no choice but to try to navigate through it.";
+        clearTimeout(this._aniIntroTimer);
+        if (ASTEROIDS.Sound && ASTEROIDS.Sound.stopTyping) ASTEROIDS.Sound.stopTyping();
+        this.aniText.textContent = '';
+        this.aniIntroEl.style.display = 'flex';
+        this.aniIntroEl.style.opacity = '1';
+        if (ASTEROIDS.Sound && ASTEROIDS.Sound.startTyping) ASTEROIDS.Sound.startTyping();
+        var i = 0;
+        (function typeNext() {
+            if (i <= message.length) {
+                self.aniText.textContent = message.substring(0, i);
+                i += 1;
+                self._aniIntroTimer = setTimeout(typeNext, 44);
+            } else {
+                if (ASTEROIDS.Sound && ASTEROIDS.Sound.stopTyping) ASTEROIDS.Sound.stopTyping();
+                self._aniIntroTimer = setTimeout(function() {
+                    self.hideAniIntro();
+                }, 1500);
+            }
+        })();
+    }
+
+    hideAniIntro() {
+        var self = this;
+        if (!this.aniIntroEl) return;
+        clearTimeout(this._aniIntroTimer);
+        if (ASTEROIDS.Sound && ASTEROIDS.Sound.stopTyping) ASTEROIDS.Sound.stopTyping();
+        this.aniIntroEl.style.opacity = '0';
+        setTimeout(function() {
+            self.aniIntroEl.style.display = 'none';
+        }, 460);
     }
 
     showStart() {

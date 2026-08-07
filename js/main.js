@@ -489,6 +489,7 @@ ASTEROIDS.Game = class Game {
         this.state = 'playing';
         this.hud.hideStart();
         this.hud.showLevelName(this.level.getName(), this.level.getCurrentLevelNumber());
+        this.hud.showAniIntro();
         if (!this.soundStarted) {
             ASTEROIDS.Sound.init();
             ASTEROIDS.Sound.startEngine();
@@ -572,6 +573,7 @@ ASTEROIDS.Game = class Game {
                 setTimeout(() => {
                     this.spawnAsteroids();
                     this.hud.showLevelName(this.level.getName(), this.level.getCurrentLevelNumber());
+                    this.hud.showAniIntro();
                 }, 2000);
             } else {
                 this.win();
@@ -806,6 +808,7 @@ ASTEROIDS.Game = class Game {
         
         setTimeout(function() {
             self.hud.showLevelName(self.level.getName(), self.level.getCurrentLevelNumber());
+            self.hud.showAniIntro();
         }, 400);
     }
     
