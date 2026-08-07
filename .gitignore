@@ -1,0 +1,12 @@
+.DS_Store
+*.log
+.a0proj/memory/
+.a0proj/secrets.env
+.a0proj/variables.env
+__pycache__/
+venv/
+node_modules/
+.idea/
+.vscode/
+*.swp
+_patch_*.py

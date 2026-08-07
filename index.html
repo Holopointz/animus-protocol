@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANIMUS PROTOCOL</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+        }
+        body {
+            background: #000;
+            overflow: hidden;
+            font-family: 'Orbitron', 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+            color: #7dffef;
+        }
+        #game-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        #game-container canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+
+    <!-- Error capture -->
+    <script>
+    window.__errors = [];
+    window.onerror = function(msg, url, line, col, error) {
+        window.__errors.push({msg:msg, url:url, line:line, col:col, stack: (error && error.stack) || ''});
+        return false;
+    };
+    window.addEventListener('unhandledrejection', function(e) {
+        window.__errors.push({msg: String(e.reason), url: '', line: 0, col: 0, stack: ''});
+    });
+    </script>
+
+    <!-- Three.js libraries -->
+    <script src="assets/three.min.js?v=15"></script>
+    <script src="assets/GLTFLoader.js?v=15"></script>
+    <script src="assets/gsap.min.js?v=15"></script>
+
+    <!-- Post-processing shaders and passes -->
+    <script src="assets/js/shaders/CopyShader.js?v=15"></script>
+    <script src="assets/js/postprocessing/EffectComposer.js?v=15"></script>
+    <script src="assets/js/postprocessing/RenderPass.js?v=15"></script>
+    <script src="assets/js/postprocessing/ShaderPass.js?v=15"></script>
+    <script src="assets/js/shaders/LuminosityHighPassShader.js?v=15"></script>
+    <script src="assets/js/postprocessing/UnrealBloomPass.js?v=15"></script>
+    <script src="assets/js/shaders/FilmShader.js?v=15"></script>
+    <script src="assets/js/postprocessing/FilmPass.js?v=15"></script>
+
+    <!-- Game scripts in dependency order -->
+    <script src="js/constants.js?v=15"></script>
+    <script src="js/noise.js?v=15"></script>
+    <script src="js/sound.js?v=15"></script>
+    <script src="js/player.js?v=15"></script>
+    <script src="js/asteroid.js?v=15"></script>
+    <script src="js/loot.js?v=15"></script>
+    <script src="js/level.js?v=15"></script>
+    <script src="js/hud.js?v=15"></script>
+    <script src="js/main.js?v=15"></script>
+</body>
+</html>
