@@ -10,3 +10,6 @@ node_modules/
 .vscode/
 *.swp
 _patch_*.py
+
+# Agent Zero internal tooling (never public)
+.a0proj/
