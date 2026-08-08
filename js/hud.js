@@ -321,10 +321,20 @@ ASTEROIDS.HUD = class HUD {
         this.effectsEl.innerHTML = effectsHTML;
     }
 
-    showAniIntro() {
+    showAniIntro(sector) {
         var self = this;
         if (!this.aniIntroEl) return;
-        var message = "This is the ANIMUS, is anybody out there? Current trajectory is an asteroid field, I've got no choice but to try to navigate through it.";
+        var ANI_DIALOGUES = {
+            1: "This is the ANIMUS, is anybody out there? Current trajectory is an asteroid field, I've got no choice but to try to navigate through it.",
+            2: "Still no response on any frequency. Sensors are picking up a debris field ahead, looks like something didn't survive whatever's out here.",
+            3: "Three days of silence now. I'm rerouting power to long-range comms, but honestly, I don't know if anyone's listening anymore.",
+            4: "Fuel reserves are lower than I'd like and I still don't have a fix on where 'home' even is from here. One system at a time, Ani. One system at a time.",
+            5: "I talked to my own ship for six hours straight yesterday just to hear a voice. That's probably not a good sign.",
+            6: "Something's wrong with the hull integrity readings—minor for now, but I don't have the parts to fix it if it gets worse. I need to keep my eyes peeled for metals.",
+            7: "I don't remember the last time I slept properly. If anyone out there can hear this, please, I just need a response—anyone!",
+            8: "The nav computer just went dark! I'm flying blind now. If I can just get through this damn asteroid field, I can reroute power from shields to boost the signal."
+        };
+        var message = ANI_DIALOGUES[sector] || ANI_DIALOGUES[1];
         clearTimeout(this._aniIntroTimer);
         if (ASTEROIDS.Sound && ASTEROIDS.Sound.stopTyping) ASTEROIDS.Sound.stopTyping();
         this.aniText.textContent = '';

@@ -350,8 +350,10 @@ ASTEROIDS.Level = class Level {
         // Create planet sphere as a distant backdrop (FrontSide, outside the playfield)
         const geometry = new THREE.SphereGeometry(ASTEROIDS.CONFIG.WORLD.PLANET_RADIUS, 64, 64);
         const texture = new THREE.TextureLoader().load('assets/textures/' + config.texture);
+        const planetBrightness = config.brightness != null ? config.brightness : 1;
         const material = new THREE.MeshBasicMaterial({
             map: texture,
+            color: new THREE.Color(planetBrightness, planetBrightness, planetBrightness),
             side: THREE.FrontSide // Render as a seen-from-outside sphere
         });
         
@@ -360,13 +362,14 @@ ASTEROIDS.Level = class Level {
         this.planetSphere.position.set(0, 0, ASTEROIDS.CONFIG.WORLD.PLANET_DISTANCE); // Far behind the playfield
         this.scene.add(this.planetSphere);
         
-        // Atmospheric glow sphere (larger, semi-transparent)
+        // Atmospheric glow sphere (larger, semi-transparent); skip for atmosphere:false planets
+        if (config.atmosphere !== false) {
         var glowColor = ASTEROIDS.CONFIG.PLANET_GLOW_COLORS[config.name] || 0x4488ff;
         var glowGeo = new THREE.SphereGeometry(ASTEROIDS.CONFIG.WORLD.PLANET_RADIUS + 8, 48, 48);
         var glowMat = new THREE.ShaderMaterial({
             uniforms: {
                 uColor: { value: new THREE.Color(glowColor) },
-                uIntensity: { value: ASTEROIDS.CONFIG.VFX.PLANET_GLOW_INTENSITY || 0.6 }
+                uIntensity: { value: config.glowIntensity != null ? config.glowIntensity : (ASTEROIDS.CONFIG.VFX.PLANET_GLOW_INTENSITY || 0.6) }
             },
             vertexShader: [
                 'varying vec3 vNormal;',
@@ -399,6 +402,7 @@ ASTEROIDS.Level = class Level {
         this.planetGlow.name = 'planetGlow';
         this.planetGlow.position.set(0, 0, ASTEROIDS.CONFIG.WORLD.PLANET_DISTANCE);
         this.scene.add(this.planetGlow);
+        }
         
         // Saturn rings
         if (config.name === 'Saturn') {
@@ -407,13 +411,35 @@ ASTEROIDS.Level = class Level {
     }
     
     createSaturnRing() {
-        const ringGeo = new THREE.RingGeometry(80, 140, 64);
+        const innerR = 80;
+        const outerR = innerR + (140 - 80) * 3; // 3x wider for dramatic rings
+        const ringGeo = new THREE.RingGeometry(innerR, outerR, 64);
+
+        // RingGeometry's default UVs map like a flat rectangle, which is
+        // why the texture looked stretched/laid-on-top instead of wrapped
+        // around the ring. Rebuild the UVs so u = angle around the ring
+        // and v = radial distance from inner to outer edge.
+        const ringPos = ringGeo.attributes.position;
+        const ringUvs = [];
+        for (let i = 0; i < ringPos.count; i++) {
+            const x = ringPos.getX(i);
+            const y = ringPos.getY(i);
+            const radius = Math.sqrt(x * x + y * y);
+            const angle = Math.atan2(y, x);
+            const v = (angle + Math.PI) / (Math.PI * 2);
+            const u = (radius - innerR) / (outerR - innerR);
+            ringUvs.push(u, v);
+        }
+        ringGeo.setAttribute('uv', new THREE.Float32BufferAttribute(ringUvs, 2));
+
         const ringTex = new THREE.TextureLoader().load('assets/textures/2k_saturn_ring_alpha.png');
+        ringTex.wrapS = THREE.ClampToEdgeWrapping;
+        ringTex.wrapT = THREE.ClampToEdgeWrapping;
         const ringMat = new THREE.MeshBasicMaterial({
             map: ringTex,
             side: THREE.DoubleSide,
             transparent: true,
-            opacity: 0.8
+            opacity: this.getConfig().ringOpacity != null ? this.getConfig().ringOpacity : 0.8
         });
         this.saturnRing = new THREE.Mesh(ringGeo, ringMat);
         this.saturnRing.rotation.x = Math.PI / 2.3;

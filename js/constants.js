@@ -10,10 +10,10 @@ ASTEROIDS.CONFIG = {
         MAX_SPEED: 22.0,
         SHOOT_COOLDOWN: 0.18,
         BULLET_SPEED: 55.0,
-        BULLET_LIFETIME: 1.6,
+        BULLET_LIFETIME: 1.9,
         SHIELD_MAX: 100,
         HULL_MAX: 100,
-        SHIELD_REGEN: 2.0,
+        SHIELD_REGEN: 1.0,
         LIVES: 3,
         RESPAWN_INVULNERABILITY: 3.0,
         // Boost: lunge forward then rubberband home to center
@@ -66,13 +66,13 @@ ASTEROIDS.CONFIG = {
     // Levels — each a different planet
     LEVELS: [
         { name: 'Sun', texture: '2k_sun.jpg', rotationSpeed: 0.008, asteroidCount: 3, speedMult: 0.6 },
-        { name: 'Mercury', texture: '2k_mercury.jpg', rotationSpeed: 0.02, asteroidCount: 4, speedMult: 0.7 },
-        { name: 'Venus', texture: '2k_venus_surface.jpg', rotationSpeed: 0.015, asteroidCount: 5, speedMult: 0.8 },
+        { name: 'Mercury', texture: '2k_mercury.jpg', rotationSpeed: 0.02, asteroidCount: 4, speedMult: 0.7, brightness: 1.0, glowIntensity: .75 , atmosphere: false},
+        { name: 'Venus', texture: '2k_venus_surface.jpg', rotationSpeed: 0.015, asteroidCount: 5, speedMult: 0.8, brightness: 1.0, glowIntensity: 0.75 , atmosphere: false},
         { name: 'Earth', texture: '2k_earth_daymap.jpg', rotationSpeed: 0.03, asteroidCount: 6, speedMult: 0.9 },
-        { name: 'Mars', texture: '2k_mars.jpg', rotationSpeed: 0.025, asteroidCount: 7, speedMult: 1.0 },
-        { name: 'Jupiter', texture: '2k_jupiter.jpg', rotationSpeed: 0.04, asteroidCount: 8, speedMult: 1.2 },
-        { name: 'Saturn', texture: '2k_saturn.jpg', rotationSpeed: 0.035, asteroidCount: 9, speedMult: 1.4 },
-        { name: 'Uranus', texture: '2k_uranus.jpg', rotationSpeed: 0.02, asteroidCount: 10, speedMult: 1.6 }
+        { name: 'Mars', texture: '2k_mars.jpg', rotationSpeed: 0.025, asteroidCount: 7, speedMult: 1.0, brightness: 1.0, glowIntensity: 0.75 , atmosphere: false},
+        { name: 'Jupiter', texture: '2k_jupiter.jpg', rotationSpeed: 0.04, asteroidCount: 8, speedMult: 1.2, brightness: 0.75, glowIntensity: 0.5 , atmosphere: false},
+        { name: 'Saturn', texture: '2k_saturn.jpg', rotationSpeed: 0.035, asteroidCount: 9, speedMult: 1.4, brightness: 0.75, glowIntensity: 0.5, ringOpacity: 0.55 , atmosphere: false},
+        { name: 'Uranus', texture: '2k_uranus.jpg', rotationSpeed: 0.02, asteroidCount: 10, speedMult: 1.6, brightness: 1.0, glowIntensity: 0.75 , atmosphere: false}
     ],
 
     // World
@@ -92,7 +92,7 @@ ASTEROIDS.CONFIG = {
         CAMERA_LERP: 4,
         CAMERA_BOOST_FOV: 78,
         CAMERA_BASE_FOV: 58,
-        CAMERA_IDLE_BOB_AMP: 0.22,
+        CAMERA_IDLE_BOB_AMP: 0.20,
         CAMERA_IDLE_BOB_FREQ: 0.45,
         CAMERA_LOOK_SPEED: 1.6,
         CAMERA_LOOK_PITCH_MAX: 0.55,
@@ -118,7 +118,7 @@ ASTEROIDS.CONFIG = {
     bloom: {
         strength: 1.05,
         radius: 0.65,
-        threshold: 0.55,
+        threshold: 0.70,
         transitionStrength: 1.5
     },
     film: false,
@@ -158,3 +158,5 @@ ASTEROIDS.CONFIG = {
         'Neptune': 0x3355ff
     }
 };
+
+

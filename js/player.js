@@ -120,8 +120,8 @@ ASTEROIDS.Player = class Player {
                     child.material.normalMap = normalMap;
                     child.material.roughnessMap = specularMap;
                     child.material.metalnessMap = specularMap;
-                    child.material.roughness = 0.55;
-                    child.material.metalness = 0.55;
+                    child.material.roughness = 0.70;
+                    child.material.metalness = 0.35;
                     child.material.emissive = new THREE.Color(0x1a3344);
                     child.material.emissiveIntensity = 0.55;
                     if (window.ASTEROIDS.envMap) {

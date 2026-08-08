@@ -203,21 +203,53 @@ ASTEROIDS.Sound = (function() {
     }
 
     function boostSound() {
-        if (playBuffer('boost', { volume: 0.9 })) return;
+        if (playBuffer('boost', { volume: 0.75 })) return;
         ensureContext();
         if (!audioCtx || muted) return;
-        var osc = audioCtx.createOscillator();
+        // If the sample is still loading, wait briefly so we don't fall back to synth.
+        if (loading['boost']) {
+            var tries = 0;
+            (function attempt() {
+                if (playBuffer('boost', { volume: 0.75 })) return;
+                if (loading['boost'] && tries++ < 5) setTimeout(attempt, 150);
+            })();
+            return;
+        }
+        // Pleasant whoosh fallback (no harsh denial buzz)
+        var t = audioCtx.currentTime;
+        var duration = 0.4;
+        var bufferSize = Math.floor(audioCtx.sampleRate * duration);
+        var buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        var data = buffer.getChannelData(0);
+        for (var i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 1.5);
+        }
+        var source = audioCtx.createBufferSource();
+        source.buffer = buffer;
         var gain = audioCtx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(90, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(420, audioCtx.currentTime + 0.12);
-        osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.32);
-        gain.gain.setValueAtTime(0.22, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.32);
-        osc.connect(gain);
+        gain.gain.setValueAtTime(0.3, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+        var filter = audioCtx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.Q.value = 1.2;
+        filter.frequency.setValueAtTime(350, t);
+        filter.frequency.exponentialRampToValueAtTime(1400, t + duration);
+        source.connect(filter);
+        filter.connect(gain);
         gain.connect(sfxGain || masterGain);
-        osc.start(audioCtx.currentTime);
-        osc.stop(audioCtx.currentTime + 0.32);
+        source.start(t);
+
+        var osc = audioCtx.createOscillator();
+        var oscGain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(180, t);
+        osc.frequency.exponentialRampToValueAtTime(700, t + duration);
+        oscGain.gain.setValueAtTime(0.12, t);
+        oscGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+        osc.connect(oscGain);
+        oscGain.connect(sfxGain || masterGain);
+        osc.start(t);
+        osc.stop(t + duration);
     }
 
     function explosion() {

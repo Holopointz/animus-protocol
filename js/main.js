@@ -490,7 +490,7 @@ ASTEROIDS.Game = class Game {
         this.state = 'playing';
         this.hud.hideStart();
         this.hud.showLevelName(this.level.getName(), this.level.getCurrentLevelNumber());
-        this.hud.showAniIntro();
+        this.hud.showAniIntro(this.level.getCurrentLevelNumber());
         if (!this.soundStarted) {
             ASTEROIDS.Sound.init();
             ASTEROIDS.Sound.startEngine();
@@ -576,7 +576,7 @@ ASTEROIDS.Game = class Game {
                     this.levelPendingSpawn = false;
                     this.spawnAsteroids();
                     this.hud.showLevelName(this.level.getName(), this.level.getCurrentLevelNumber());
-                    this.hud.showAniIntro();
+                    this.hud.showAniIntro(this.level.getCurrentLevelNumber());
                 }, 2000);
             } else {
                 this.win();
@@ -711,7 +711,7 @@ ASTEROIDS.Game = class Game {
                 // Shield-hit flash (blue translucent sphere)
                 this.createShieldFlash(playerPos, playerRadius);
                 
-                const destroyed = this.player.takeDamage(20);
+                const destroyed = this.player.takeDamage(30);
                 // Push the ship away and grant a short grace window so an
                 // overlapping rock can't chain 20-damage hits every frame.
                 this.player.velocity.addScaledVector(collisionNormal, 10.0);
@@ -816,7 +816,7 @@ ASTEROIDS.Game = class Game {
         
         setTimeout(function() {
             self.hud.showLevelName(self.level.getName(), self.level.getCurrentLevelNumber());
-            self.hud.showAniIntro();
+            self.hud.showAniIntro(self.level.getCurrentLevelNumber());
         }, 400);
     }
     
