@@ -196,13 +196,15 @@ ASTEROIDS.Asteroid = class Asteroid {
         this.mesh.position.x += this.velocity.x * dt;
         this.mesh.position.y += this.velocity.y * dt;
         
-        // Wrap around
-        const size = ASTEROIDS.CONFIG.WORLD.SIZE + 5;
+        // Keep rocks inside the visible arena: bounce off the boundary instead
+        // of wrapping into the invisible off-screen zone (which made the last
+        // asteroids impossible to find and finish).
         const pos = this.mesh.position;
-        if (pos.x > size) pos.x = -size;
-        if (pos.x < -size) pos.x = size;
-        if (pos.y > size) pos.y = -size;
-        if (pos.y < -size) pos.y = size;
+        const bnd = ASTEROIDS.CONFIG.ASTEROID.BOUNDARY || { x: 24, y: 15 };
+        if (pos.x > bnd.x) { pos.x = bnd.x; this.velocity.x = -Math.abs(this.velocity.x); }
+        if (pos.x < -bnd.x) { pos.x = -bnd.x; this.velocity.x = Math.abs(this.velocity.x); }
+        if (pos.y > bnd.y) { pos.y = bnd.y; this.velocity.y = -Math.abs(this.velocity.y); }
+        if (pos.y < -bnd.y) { pos.y = -bnd.y; this.velocity.y = Math.abs(this.velocity.y); }
         
         // Tumble
         this.mesh.rotation.x += this.rotSpeed.x * dt;
@@ -283,15 +285,15 @@ ASTEROIDS.AsteroidManager = class AsteroidManager {
         const margin = config.SPAWN_MARGIN;
         
         for (let i = 0; i < count; i++) {
-            // Spawn at random position on edges
+            // Spawn at random position just outside the visible bounce boundary
             const side = Math.floor(Math.random() * 4);
             let pos;
-            const worldSize = ASTEROIDS.CONFIG.WORLD.SIZE;
+            const bnd = ASTEROIDS.CONFIG.ASTEROID.BOUNDARY || { x: 24, y: 15 };
             switch(side) {
-                case 0: pos = new THREE.Vector3(-margin, (Math.random() - 0.5) * worldSize * 2, 0); break;
-                case 1: pos = new THREE.Vector3(margin, (Math.random() - 0.5) * worldSize * 2, 0); break;
-                case 2: pos = new THREE.Vector3((Math.random() - 0.5) * worldSize * 2, -margin, 0); break;
-                case 3: pos = new THREE.Vector3((Math.random() - 0.5) * worldSize * 2, margin, 0); break;
+                case 0: pos = new THREE.Vector3(-(bnd.x + margin), (Math.random() * 2 - 1) * bnd.y, 0); break;
+                case 1: pos = new THREE.Vector3((bnd.x + margin), (Math.random() * 2 - 1) * bnd.y, 0); break;
+                case 2: pos = new THREE.Vector3((Math.random() * 2 - 1) * bnd.x, -(bnd.y + margin), 0); break;
+                case 3: pos = new THREE.Vector3((Math.random() * 2 - 1) * bnd.x, (bnd.y + margin), 0); break;
             }
             
             // Direction toward center-ish area
