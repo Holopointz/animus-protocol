@@ -42,9 +42,10 @@ ASTEROIDS.CONFIG = {
         MIN_SPEED: 2.0,
         MAX_SPEED: 8.0,
         LOOT_DROP_CHANCE: 0.35,
-        SPAWN_MARGIN: 18,
-        // Bounce boundary: asteroids reflect at this rectangle, always staying visible
-        BOUNDARY: { x: 24, y: 15 }
+        SPAWN_MARGIN: 6,
+        // Bounce boundary: asteroids reflect here; slightly beyond the camera so
+        // they can drift a little off-screen, but stay findable with free-look.
+        BOUNDARY: { x: 36, y: 24 }
     },
 
     // Loot / powerups
