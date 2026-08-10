@@ -104,6 +104,9 @@ ASTEROIDS.Game = class Game {
         this.soundStarted = false;
         this.levelPendingSpawn = false; // guards double-nextLevel skip
 
+        // Endless loop: number of cleared 8-sector loops (0 = first playthrough)
+        this.loopLevel = 0;
+        
         // Free-look camera orbit around ship
         this.lookYaw = 0;
         this.lookPitch = 0.18;
@@ -427,8 +430,20 @@ ASTEROIDS.Game = class Game {
                 return;
             }
 
-            if (e.key === 'Enter' && (self.state === 'gameover' || self.state === 'win')) {
+            if (e.key === 'Enter' && self.state === 'gameover') {
                 self.restart();
+                e.preventDefault();
+                return;
+            }
+
+            if (e.key === 'Enter' && self.state === 'win') {
+                self.continueLoop();
+                e.preventDefault();
+                return;
+            }
+
+            if ((e.key === 'Backspace' || k === 'backspace') && self.state === 'win') {
+                self.returnToMenu();
                 e.preventDefault();
                 return;
             }
@@ -502,8 +517,12 @@ ASTEROIDS.Game = class Game {
     }
     
     spawnAsteroids() {
-        const count = this.level.getAsteroidCount();
-        const speedMult = this.level.getSpeedMult();
+        const baseCount = this.level.getAsteroidCount();
+        const baseSpeed = this.level.getSpeedMult();
+        const loop = this.loopLevel || 0;
+        // Procedural difficulty: each cleared loop adds more/faster rocks
+        const count = Math.min(baseCount + loop, 30);
+        const speedMult = baseSpeed * (1 + loop * 0.2);
         this.asteroidManager.spawn(count, speedMult);
     }
     
@@ -752,14 +771,63 @@ ASTEROIDS.Game = class Game {
     }
     
     win() {
+        this.loopLevel = (this.loopLevel || 0) + 1;
         this.state = 'win';
         ASTEROIDS.Sound.stopEngine();
         ASTEROIDS.Sound.stopAmbient();
         if (ASTEROIDS.Sound.uiWin) ASTEROIDS.Sound.uiWin();
-        this.hud.showYouWin(this.player.score);
+        this.hud.showLevelClear(this.loopLevel, this.player.score);
     }
     
-    restart() {
+    // Continue into the next difficulty loop (Enter on win screen)
+    continueLoop() {
+        this._cleanupEntities();
+        this.level.reset();
+        this.player.lives = ASTEROIDS.CONFIG.PLAYER.LIVES;
+        this.player.spawn(0, 0, 0);
+        this.hud.hideGameOver();
+        this.hud.hideStart();
+        this.hud.showPause(false);
+        this.lookYaw = 0;
+        this.lookPitch = 0.18;
+        ASTEROIDS.Sound.stopEngine();
+        ASTEROIDS.Sound.stopAmbient();
+        ASTEROIDS.Sound.init();
+        ASTEROIDS.Sound.startEngine();
+        ASTEROIDS.Sound.startAmbient();
+        this.soundStarted = true;
+        this.state = 'playing';
+        this.levelPendingSpawn = false;
+        this.spawnAsteroids();
+        var self = this;
+        setTimeout(function() {
+            self.hud.showLevelName(self.level.getName(), self.level.getCurrentLevelNumber());
+            self.hud.showAniIntro(self.level.getCurrentLevelNumber());
+        }, 400);
+    }
+    
+    // Return to main menu from win screen (Backspace)
+    returnToMenu() {
+        this._cleanupEntities();
+        this.loopLevel = 0;
+        this.level.reset();
+        this.player.lives = ASTEROIDS.CONFIG.PLAYER.LIVES;
+        this.player.score = 0;
+        this.player.spawn(0, 0, 0);
+        this.hud.hideGameOver();
+        this.hud.hideStart();
+        this.hud.showPause(false);
+        this.hud.showStart();
+        this.lookYaw = 0;
+        this.lookPitch = 0.18;
+        ASTEROIDS.Sound.stopEngine();
+        ASTEROIDS.Sound.stopAmbient();
+        this.state = 'menu';
+        this.levelPendingSpawn = false;
+        this.spawnAsteroids();
+    }
+    
+    _cleanupEntities() {
         var self = this;
         // Clean up bullets
         this.bullets.forEach(function(b) {
@@ -790,6 +858,11 @@ ASTEROIDS.Game = class Game {
             self.scene.remove(p.mesh);
         });
         this.debrisParticles = [];
+    }
+    
+    restart() {
+        this._cleanupEntities();
+        this.loopLevel = 0;
         
         this.level.reset();
         

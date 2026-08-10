@@ -402,12 +402,14 @@ ASTEROIDS.HUD = class HUD {
         this.gameOverEl.style.display = 'none';
     }
 
-    showYouWin(finalScore) {
+    showLevelClear(loopLevel, finalScore) {
+        var n = loopLevel || 1;
         this.gameOverEl.innerHTML = [
             '<div style="font-size:48px;font-weight:800;color:#00ffcc;',
-            'text-shadow:0 0 30px #00ffcc;letter-spacing:0.12em">SECTOR CLEAR</div>',
+            'text-shadow:0 0 30px #00ffcc;letter-spacing:0.12em">LEVEL ' + n + ' CLEARED</div>',
             '<div style="margin-top:18px;color:#fff;font-size:22px">Final Score: ' + finalScore + '</div>',
-            '<div style="margin-top:22px;font-size:15px;color:#9ad8ff;letter-spacing:0.16em">PRESS ENTER TO PLAY AGAIN</div>'
+            '<div style="margin-top:22px;font-size:15px;color:#9ad8ff;letter-spacing:0.16em">PRESS ENTER TO CONTINUE</div>',
+            '<div style="margin-top:6px;font-size:13px;color:#7d9bb5;letter-spacing:0.14em">PRESS BACKSPACE TO RETURN TO MENU</div>'
         ].join('');
         this.gameOverEl.style.display = 'block';
     }
