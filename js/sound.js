@@ -215,41 +215,8 @@ ASTEROIDS.Sound = (function() {
             })();
             return;
         }
-        // Pleasant whoosh fallback (no harsh denial buzz)
-        var t = audioCtx.currentTime;
-        var duration = 0.4;
-        var bufferSize = Math.floor(audioCtx.sampleRate * duration);
-        var buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-        var data = buffer.getChannelData(0);
-        for (var i = 0; i < bufferSize; i++) {
-            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 1.5);
-        }
-        var source = audioCtx.createBufferSource();
-        source.buffer = buffer;
-        var gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(0.3, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
-        var filter = audioCtx.createBiquadFilter();
-        filter.type = 'bandpass';
-        filter.Q.value = 1.2;
-        filter.frequency.setValueAtTime(350, t);
-        filter.frequency.exponentialRampToValueAtTime(1400, t + duration);
-        source.connect(filter);
-        filter.connect(gain);
-        gain.connect(sfxGain || masterGain);
-        source.start(t);
-
-        var osc = audioCtx.createOscillator();
-        var oscGain = audioCtx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(180, t);
-        osc.frequency.exponentialRampToValueAtTime(700, t + duration);
-        oscGain.gain.setValueAtTime(0.12, t);
-        oscGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
-        osc.connect(oscGain);
-        oscGain.connect(sfxGain || masterGain);
-        osc.start(t);
-        osc.stop(t + duration);
+        // No synthetic fallback: if the boost sample isn't available, stay silent.
+        // Previously a synth whoosh could still sound like a negative/denial tone.
     }
 
     function explosion() {
