@@ -346,6 +346,15 @@ ASTEROIDS.Level = class Level {
             this.saturnRing.material.dispose();
             this.saturnRing = null;
         }
+
+        // Remove old Earth cloud layer
+        if (this.planetClouds) {
+            this.scene.remove(this.planetClouds);
+            this.planetClouds.geometry.dispose();
+            if (this.planetClouds.material.map) this.planetClouds.material.map.dispose();
+            this.planetClouds.material.dispose();
+            this.planetClouds = null;
+        }
         
         // Create planet sphere as a distant backdrop (FrontSide, outside the playfield)
         const geometry = new THREE.SphereGeometry(ASTEROIDS.CONFIG.WORLD.PLANET_RADIUS, 64, 64);
@@ -361,11 +370,16 @@ ASTEROIDS.Level = class Level {
         this.planetSphere.name = 'planet';
         this.planetSphere.position.set(0, 0, ASTEROIDS.CONFIG.WORLD.PLANET_DISTANCE); // Far behind the playfield
         this.scene.add(this.planetSphere);
+
+        // Earth cloud layer (jpg with black as alpha; sphere just inside the atmosphere)
+        if (config.cloudTexture) {
+            this._createCloudLayer(config);
+        }
         
         // Atmospheric glow sphere (larger, semi-transparent); skip for atmosphere:false planets
         if (config.atmosphere !== false) {
         var glowColor = ASTEROIDS.CONFIG.PLANET_GLOW_COLORS[config.name] || 0x4488ff;
-        var glowGeo = new THREE.SphereGeometry(ASTEROIDS.CONFIG.WORLD.PLANET_RADIUS + 8, 48, 48);
+        var glowGeo = new THREE.SphereGeometry(ASTEROIDS.CONFIG.WORLD.PLANET_RADIUS + (config.glowHeight != null ? config.glowHeight : 8), 48, 48);
         var glowMat = new THREE.ShaderMaterial({
             uniforms: {
                 uColor: { value: new THREE.Color(glowColor) },
@@ -410,6 +424,43 @@ ASTEROIDS.Level = class Level {
         }
     }
     
+    _createCloudLayer(config) {
+        const sign = (this._cloudSign = (this._cloudSign || 0) + 1);
+        const geo = new THREE.SphereGeometry(ASTEROIDS.CONFIG.WORLD.PLANET_RADIUS + 5, 64, 64);
+        const self = this;
+        new THREE.TextureLoader().load('assets/textures/' + config.cloudTexture, function (tex) {
+            if (sign !== self._cloudSign) return; // level changed while loading
+            const img = tex.image;
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                // jpg has black where there are no clouds: use luminance as alpha
+                const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+                data[i + 3] = lum;
+            }
+            ctx.putImageData(imageData, 0, 0);
+            const cloudTex = new THREE.CanvasTexture(canvas);
+            cloudTex.needsUpdate = true;
+            const cloudEmission = config.cloudEmission != null ? config.cloudEmission : 1;
+            const mat = new THREE.MeshBasicMaterial({
+                map: cloudTex,
+                color: new THREE.Color(cloudEmission, cloudEmission, cloudEmission),
+                transparent: true,
+                depthWrite: false,
+                side: THREE.FrontSide
+            });
+            self.planetClouds = new THREE.Mesh(geo, mat);
+            self.planetClouds.name = 'planetClouds';
+            self.planetClouds.position.set(0, 0, ASTEROIDS.CONFIG.WORLD.PLANET_DISTANCE);
+            self.scene.add(self.planetClouds);
+        });
+    }
+
     createSaturnRing() {
         const innerR = 80;
         const outerR = innerR + (140 - 80) * 3; // 3x wider for dramatic rings
@@ -469,6 +520,11 @@ ASTEROIDS.Level = class Level {
         // Rotate planet glow with same speed
         if (this.planetGlow) {
             this.planetGlow.rotation.y += config.rotationSpeed * dt;
+        }
+
+        // Rotate Earth cloud layer (clouds drift slightly faster than surface)
+        if (this.planetClouds) {
+            this.planetClouds.rotation.y += (config.rotationSpeed * 1.8) * dt;
         }
         
         // Rotate Saturn ring
@@ -611,6 +667,12 @@ ASTEROIDS.Level = class Level {
             this.saturnRing.geometry.dispose();
             this.saturnRing.material.map.dispose();
             this.saturnRing.material.dispose();
+        }
+        if (this.planetClouds) {
+            this.scene.remove(this.planetClouds);
+            this.planetClouds.geometry.dispose();
+            if (this.planetClouds.material.map) this.planetClouds.material.map.dispose();
+            this.planetClouds.material.dispose();
         }
         if (this.planetGlow) {
             this.scene.remove(this.planetGlow);

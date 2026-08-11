@@ -448,62 +448,65 @@ ASTEROIDS.Game = class Game {
                 return;
             }
 
-            if ((k === 'p' || e.key === 'Escape') && (self.state === 'playing' || self.state === 'paused')) {
+            if (self._controlsHeld) {
+                // C-hold controls overlay: don't let P/Escape toggle the normal pause
+            } else if ((k === 'p' || e.key === 'Escape') && (self.state === 'playing' || self.state === 'paused')) {
                 if (self.state === 'playing') {
                     self.state = 'paused';
+                    self.hud.hideControls();
                     self.hud.showPause(true);
                     if (ASTEROIDS.Sound.uiPause) ASTEROIDS.Sound.uiPause();
                 } else {
                     self.state = 'playing';
                     self.hud.showPause(false);
+                    self.hud.showControlsHint(true);
                     if (ASTEROIDS.Sound.menuClick) ASTEROIDS.Sound.menuClick();
                 }
                 e.preventDefault();
             }
 
             if (k === 'c' && self.state === 'playing') {
-                self.lookYaw = 0;
-                self.lookPitch = 0.18;
+                self._controlsHeld = true;
+                self.state = 'paused';
+                self.hud.showControls();
+                self.hud.showControlsHint(false);
+                e.preventDefault();
             }
         });
 
         window.addEventListener('keyup', function(e) {
             self._lookKeys[e.key.toLowerCase()] = false;
-        });
-
-        var dom = this.renderer.domElement;
-        dom.addEventListener('mousedown', function(e) {
-            if (self.state !== 'playing') return;
-            if (e.button === 0 || e.button === 2) {
-                self._mouseLook = true;
-                self._lastMouse = { x: e.clientX, y: e.clientY };
+            if (e.key.toLowerCase() === 'c' && self._controlsHeld) {
+                self._controlsHeld = false;
+                self.hud.hideControls();
+                self.hud.showControlsHint(true);
+                if (self.state === 'paused') {
+                    self.state = 'playing';
+                }
             }
         });
-        window.addEventListener('mouseup', function() {
-            self._mouseLook = false;
-            self._lastMouse = null;
-        });
-        window.addEventListener('mousemove', function(e) {
-            if (!self._mouseLook || self.state !== 'playing' || !self._lastMouse) return;
-            var dx = e.clientX - self._lastMouse.x;
-            var dy = e.clientY - self._lastMouse.y;
-            self._lastMouse = { x: e.clientX, y: e.clientY };
-            var sens = vis.CAMERA_MOUSE_SENS || 0.0022;
-            self.lookYaw -= dx * sens;
-            self.lookPitch += dy * sens;
-            var yawMax = vis.CAMERA_LOOK_YAW_MAX || 1.15;
-            var pitchMax = vis.CAMERA_LOOK_PITCH_MAX || 0.55;
-            self.lookYaw = Math.max(-yawMax, Math.min(yawMax, self.lookYaw));
-            self.lookPitch = Math.max(-pitchMax, Math.min(pitchMax, self.lookPitch));
-        });
 
-        window.addEventListener('contextmenu', function(e) { e.preventDefault(); });
-        window.addEventListener('blur', function() { self._lookKeys = {}; self._mouseLook = false; });
+        window.addEventListener('blur', function() {
+            self._lookKeys = {};
+            self._mouseLook = false;
+            if (self._controlsHeld) {
+                self._controlsHeld = false;
+                self.hud.hideControls();
+                if (self.state === 'paused') {
+                    self.state = 'playing';
+                }
+            }
+            if (self.hud) {
+                self.hud.hideControls();
+            }
+        });
     }
 
     beginPlay() {
         this.state = 'playing';
         this.hud.hideStart();
+        this.hud.hideControls();
+        this.hud.showControlsHint(true);
         this.hud.showLevelName(this.level.getName(), this.level.getCurrentLevelNumber());
         this.hud.showAniIntro(this.level.getCurrentLevelNumber());
         if (!this.soundStarted) {
@@ -767,6 +770,8 @@ ASTEROIDS.Game = class Game {
         ASTEROIDS.Sound.stopEngine();
         ASTEROIDS.Sound.stopAmbient();
         if (ASTEROIDS.Sound.uiGameOver) ASTEROIDS.Sound.uiGameOver();
+        this.hud.hideControls();
+        this.hud.showControlsHint(false);
         this.hud.showGameOver(this.player.score);
     }
     
@@ -776,6 +781,8 @@ ASTEROIDS.Game = class Game {
         ASTEROIDS.Sound.stopEngine();
         ASTEROIDS.Sound.stopAmbient();
         if (ASTEROIDS.Sound.uiWin) ASTEROIDS.Sound.uiWin();
+        this.hud.hideControls();
+        this.hud.showControlsHint(false);
         this.hud.showLevelClear(this.loopLevel, this.player.score);
     }
     
@@ -798,6 +805,8 @@ ASTEROIDS.Game = class Game {
         this.soundStarted = true;
         this.state = 'playing';
         this.levelPendingSpawn = false;
+        this.hud.hideControls();
+        this.hud.showControlsHint(true);
         this.spawnAsteroids();
         var self = this;
         setTimeout(function() {
@@ -818,6 +827,8 @@ ASTEROIDS.Game = class Game {
         this.hud.hideStart();
         this.hud.showPause(false);
         this.hud.showStart();
+        this.hud.hideControls();
+        this.hud.showControlsHint(false);
         this.lookYaw = 0;
         this.lookPitch = 0.18;
         ASTEROIDS.Sound.stopEngine();
@@ -885,6 +896,8 @@ ASTEROIDS.Game = class Game {
         
         this.state = 'playing';
         this.levelPendingSpawn = false;
+        this.hud.hideControls();
+        this.hud.showControlsHint(true);
         this.spawnAsteroids();
         
         setTimeout(function() {

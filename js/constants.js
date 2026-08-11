@@ -71,7 +71,7 @@ ASTEROIDS.CONFIG = {
         { name: 'Sun', texture: '2k_sun.jpg', rotationSpeed: 0.008, asteroidCount: 3, speedMult: 0.6 },
         { name: 'Mercury', texture: '2k_mercury.jpg', rotationSpeed: 0.02, asteroidCount: 4, speedMult: 0.7, brightness: 1.0, glowIntensity: .75 , atmosphere: false},
         { name: 'Venus', texture: '2k_venus_surface.jpg', rotationSpeed: 0.015, asteroidCount: 5, speedMult: 0.8, brightness: 1.0, glowIntensity: 0.75 , atmosphere: false},
-        { name: 'Earth', texture: '2k_earth_daymap.jpg', rotationSpeed: 0.03, asteroidCount: 6, speedMult: 0.9 },
+        { name: 'Earth', texture: '2k_earth_daymap.jpg', rotationSpeed: 0.03, asteroidCount: 6, speedMult: 0.9, cloudTexture: '2k_earth_clouds.jpg', cloudEmission: 3, glowHeight: 5 },
         { name: 'Mars', texture: '2k_mars.jpg', rotationSpeed: 0.025, asteroidCount: 7, speedMult: 1.0, brightness: 1.0, glowIntensity: 0.75 , atmosphere: false},
         { name: 'Jupiter', texture: '2k_jupiter.jpg', rotationSpeed: 0.04, asteroidCount: 8, speedMult: 1.2, brightness: 0.75, glowIntensity: 0.5 , atmosphere: false},
         { name: 'Saturn', texture: '2k_saturn.jpg', rotationSpeed: 0.035, asteroidCount: 9, speedMult: 1.4, brightness: 0.75, glowIntensity: 0.5, ringOpacity: 0.55 , atmosphere: false},

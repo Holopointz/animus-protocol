@@ -119,7 +119,7 @@ ASTEROIDS.HUD = class HUD {
             this._ctrlRow('Q / E', 'Look yaw'),
             this._ctrlRow('R / F', 'Look pitch'),
             this._ctrlRow('MOUSE DRAG', 'Free-look camera'),
-            this._ctrlRow('C', 'Reset camera'),
+            this._ctrlRow('C', 'Hold for controls'),
             this._ctrlRow('P / ESC', 'Pause'),
             this._ctrlRow('ENTER', 'Start / Restart'),
             '</div>',
@@ -136,6 +136,55 @@ ASTEROIDS.HUD = class HUD {
             '<style>@keyframes a0pulse{0%,100%{opacity:0.55}50%{opacity:1}}</style>'
         ].join('');
         this.hudDiv.appendChild(this.startEl);
+
+        // In-game "C FOR CONTROLS" hint (bottom center, same bottom offset as Shield/Hull)
+        this.controlsHintEl = document.createElement('div');
+        this.controlsHintEl.id = 'controls-hint';
+        this.controlsHintEl.textContent = 'C FOR CONTROLS';
+        this.controlsHintEl.style.cssText = [
+            'position:absolute', 'bottom:28px', 'left:50%', 'transform:translateX(-50%)',
+            'font-size:12px', 'color:#ffffff', 'opacity:0.5', 'letter-spacing:0.14em',
+            'font-weight:600', 'text-shadow:0 0 8px rgba(0,0,0,0.8)',
+            'z-index:14', 'pointer-events:none', 'display:none'
+        ].join(';');
+        this.hudDiv.appendChild(this.controlsHintEl);
+
+        // In-game controls overlay (same panel as main menu; no pause), shown while C is held
+        this.controlsEl = document.createElement('div');
+        this.controlsEl.id = 'controls-overlay';
+        this.controlsEl.style.cssText = [
+            'position:absolute', 'inset:0', 'display:none', 'align-items:center',
+            'justify-content:center', 'pointer-events:none',
+            'background:rgba(0,0,0,0.55)',
+            'z-index:16'
+        ].join(';');
+        this.controlsEl.innerHTML = [
+            '<div style="max-width:720px;width:92%;text-align:center;padding:36px 28px;',
+            'border:1px solid rgba(0,255,220,0.28);border-radius:18px;',
+            'background:linear-gradient(160deg,rgba(4,18,36,0.92),rgba(2,8,18,0.94));',
+            'box-shadow:0 0 60px rgba(0,180,255,0.18), inset 0 0 40px rgba(0,80,140,0.12);">',
+            '<div style="font-size:13px;letter-spacing:0.35em;color:#6fefff;margin-bottom:10px;font-weight:600">ANIMUS PROTOCOL</div>',
+            '<div style="font-size:28px;font-weight:800;color:#fff;letter-spacing:0.08em;margin-bottom:18px;',
+            'text-shadow:0 0 30px rgba(0,220,255,0.7)">CONTROLS</div>',
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 22px;text-align:left;',
+            'font-size:14px;color:#d7f7ff;margin:0 auto 8px;max-width:520px;line-height:1.55">',
+            this._ctrlRow('A / ←', 'Rotate left'),
+            this._ctrlRow('D / →', 'Rotate right'),
+            this._ctrlRow('W / ↑', 'Thrust'),
+            this._ctrlRow('S / ↓', 'Brake'),
+            this._ctrlRow('SPACE', 'Fire lasers'),
+            this._ctrlRow('SHIFT / B', 'Boost lunge'),
+            this._ctrlRow('Q / E', 'Look yaw'),
+            this._ctrlRow('R / F', 'Look pitch'),
+            this._ctrlRow('MOUSE DRAG', 'Free-look camera'),
+            this._ctrlRow('C', 'Hold for controls'),
+            this._ctrlRow('P / ESC', 'Pause'),
+            this._ctrlRow('ENTER', 'Start / Restart'),
+            '</div>',
+            '<div style="font-size:13px;color:#8ec8e8;margin-top:12px;opacity:0.85">RELEASE C TO CLOSE</div>',
+            '</div>'
+        ].join('');
+        this.hudDiv.appendChild(this.controlsEl);
 
         // Pause overlay
         this.pauseEl = document.createElement('div');
@@ -375,6 +424,18 @@ ASTEROIDS.HUD = class HUD {
         this.startEl.style.display = 'none';
     }
 
+    showControls() {
+        if (this.controlsEl) this.controlsEl.style.display = 'flex';
+    }
+
+    hideControls() {
+        if (this.controlsEl) this.controlsEl.style.display = 'none';
+    }
+
+    showControlsHint(show) {
+        if (this.controlsHintEl) this.controlsHintEl.style.display = show ? 'block' : 'none';
+    }
+
     showPause(show) {
         this.pauseEl.style.display = show ? 'flex' : 'none';
     }
@@ -409,7 +470,7 @@ ASTEROIDS.HUD = class HUD {
             'text-shadow:0 0 30px #00ffcc;letter-spacing:0.12em">LEVEL ' + n + ' CLEARED</div>',
             '<div style="margin-top:18px;color:#fff;font-size:22px">Final Score: ' + finalScore + '</div>',
             '<div style="margin-top:22px;font-size:15px;color:#9ad8ff;letter-spacing:0.16em">PRESS ENTER TO CONTINUE</div>',
-            '<div style="margin-top:6px;font-size:13px;color:#7d9bb5;letter-spacing:0.14em">PRESS BACKSPACE TO RETURN TO MENU</div>'
+            '<div style="margin-top:6px;font-size:13px;color:#7d9bb5;letter-spacing:0.14em">BACKSPACE TO EXIT</div>'
         ].join('');
         this.gameOverEl.style.display = 'block';
     }
