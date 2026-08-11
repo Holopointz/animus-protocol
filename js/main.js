@@ -76,6 +76,12 @@ ASTEROIDS.Game = class Game {
         // Explosion flash lights
         this.explosionLights = [];
         
+        // Spritesheet explosion sprites (5x5 grid, destroyed after final frame)
+        this.explosionSprites = [];
+        this._explosionSheetTexture = null;
+        // Preload immediately - start() is never called on this page, so load the sheet here
+        this._explosionSheetTexture = new THREE.TextureLoader().load('assets/textures/explosion.png');
+        
         // Smoke/dust particles (soft cloud sprites)
         this.smokeParticles = [];
         
@@ -530,6 +536,9 @@ ASTEROIDS.Game = class Game {
     }
     
     start() {
+        if (!this._explosionSheetTexture) {
+            this._explosionSheetTexture = new THREE.TextureLoader().load('assets/textures/explosion.png');
+        }
         this.clock.start();
         this.animate();
     }
@@ -573,6 +582,9 @@ ASTEROIDS.Game = class Game {
         
         // Update explosion flash lights
         this.updateExplosionLights(dt);
+        
+        // Update spritesheet explosions
+        this.updateExplosionSprites(dt);
         
         // Update smoke particles
         this.updateSmokeParticles(dt);
@@ -863,6 +875,14 @@ ASTEROIDS.Game = class Game {
         });
         this.explosionLights = [];
         
+        // Clean up spritesheet explosion sprites
+        this.explosionSprites.forEach(function(es) {
+            self.scene.remove(es.mesh);
+            if (es.mesh.material.map) es.mesh.material.map.dispose();
+            es.mesh.material.dispose();
+        });
+        this.explosionSprites = [];
+        
         // Clean up debris particles
         this.debrisParticles.forEach(function(p) {
             self._disposeObject(p.mesh);
@@ -918,94 +938,6 @@ ASTEROIDS.Game = class Game {
             maxLife: 0.8
         });
         
-        var count = ASTEROIDS.CONFIG.VFX.EXPLOSION_PARTICLE_COUNT;
-        var colors = [0xff6600, 0xff9900, 0xffff00, 0xffffff];
-        
-        // White-hot core flash (few large bright spheres at center)
-        for (var ci = 0; ci < 8; ci++) {
-            var coreGeo = new THREE.SphereGeometry(0.5 + Math.random() * 0.8, 8, 8);
-            var coreMat = new THREE.MeshBasicMaterial({
-                color: 0xffffff,
-                transparent: true,
-                opacity: 1
-            });
-            var core = new THREE.Mesh(coreGeo, coreMat);
-            core.position.copy(position);
-            core.position.x += (Math.random() - 0.5) * 0.5;
-            core.position.y += (Math.random() - 0.5) * 0.5;
-            this.scene.add(core);
-            this.explosionParticles.push({
-                mesh: core,
-                velocity: new THREE.Vector3(
-                    (Math.random() - 0.5) * 0.5,
-                    (Math.random() - 0.5) * 0.5,
-                    (Math.random() - 0.5) * 0.3
-                ),
-                life: 0.15 + Math.random() * 0.15,
-                maxLife: 0.2
-            });
-        }
-        
-        // Particle explosion (larger, longer-lasting)
-        for (var i = 0; i < count; i++) {
-            var geo = new THREE.SphereGeometry(0.2 + Math.random() * 0.6, 6, 6);
-            var mat = new THREE.MeshBasicMaterial({
-                color: colors[Math.floor(Math.random() * colors.length)],
-                transparent: true,
-                opacity: 1
-            });
-            var mesh = new THREE.Mesh(geo, mat);
-            mesh.position.copy(position);
-            
-            var speed = 3 + Math.random() * radius * 1.2;
-            var vel = new THREE.Vector3(
-                (Math.random() - 0.5) * speed * 2,
-                (Math.random() - 0.5) * speed * 2,
-                (Math.random() - 0.5) * speed * 0.8
-            );
-            
-            this.scene.add(mesh);
-            this.explosionParticles.push({
-                mesh: mesh,
-                velocity: vel,
-                life: 0.8 + Math.random() * 0.8,
-                maxLife: 1.0
-            });
-        }
-        
-        // Tumbling debris meshes (small icosahedrons that inherit asteroid velocity)
-        var debrisCount = 5 + Math.floor(Math.random() * 4);
-        for (var di = 0; di < debrisCount; di++) {
-            var dGeo = new THREE.IcosahedronGeometry(0.1 + Math.random() * 0.3, 0);
-            var dMat = new THREE.MeshStandardMaterial({
-                color: 0x888877,
-                roughness: 0.8,
-                metalness: 0.2,
-                flatShading: true
-            });
-            var debris = new THREE.Mesh(dGeo, dMat);
-            debris.position.copy(position);
-            var scatter = new THREE.Vector3(
-                (Math.random() - 0.5) * radius * 2,
-                (Math.random() - 0.5) * radius * 2,
-                (Math.random() - 0.5) * radius
-            );
-            var dVel = new THREE.Vector3().copy(scatter).normalize().multiplyScalar(2 + Math.random() * 3);
-            var dRot = new THREE.Vector3(
-                (Math.random() - 0.5) * 8,
-                (Math.random() - 0.5) * 8,
-                (Math.random() - 0.5) * 8
-            );
-            this.scene.add(debris);
-            this.debrisParticles.push({
-                mesh: debris,
-                velocity: dVel,
-                rotSpeed: dRot,
-                life: 1.0 + Math.random() * 1.0,
-                maxLife: 1.0
-            });
-        }
-        
         // Smoke particles (soft expanding cloud)
         if (this._sharedSmokeTexture) {
             var smokeCount = 12 + Math.floor(Math.random() * 8);
@@ -1039,40 +971,82 @@ ASTEROIDS.Game = class Game {
             }
         }
         
+        // Spritesheet explosion (5x5 grid, sequential frames top-left -> bottom-right)
+        this._spawnExplosionSprite(position, radius);
+        
         ASTEROIDS.Sound.explosion();
     }
     
-    createImpactSparks(position, normal) {
-        var sparkCount = 20;
-        for (var i = 0; i < sparkCount; i++) {
-            var sGeo = new THREE.SphereGeometry(0.05 + Math.random() * 0.1, 4, 4);
-            var sColor = Math.random() > 0.5 ? 0xff6600 : 0xffffff;
-            var sMat = new THREE.MeshBasicMaterial({
-                color: sColor,
-                transparent: true,
-                opacity: 1
-            });
-            var spark = new THREE.Mesh(sGeo, sMat);
-            spark.position.copy(position);
-            
-            // Outward velocity from impact point
-            var sVel = normal.clone()
-                .add(new THREE.Vector3(
-                    (Math.random() - 0.5) * 1.5,
-                    (Math.random() - 0.5) * 1.5,
-                    (Math.random() - 0.5) * 1.5
-                ))
-                .normalize()
-                .multiplyScalar(3 + Math.random() * 8);
-            
-            this.scene.add(spark);
-            this.explosionParticles.push({
-                mesh: spark,
-                velocity: sVel,
-                life: 0.2 + Math.random() * 0.3,
-                maxLife: 0.3
-            });
+    _spawnExplosionSprite(position, radius) {
+        if (!this._explosionSheetTexture || !this._explosionSheetTexture.image) return;
+        
+        var cols = 5;
+        var rows = 5;
+        var totalFrames = cols * rows;
+        // Build a texture per explosion from the shared image so simultaneous blasts keep independent offsets
+        var tex = new THREE.Texture(this._explosionSheetTexture.image);
+        tex.needsUpdate = true;
+        tex.wrapS = THREE.ClampToEdgeWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.magFilter = THREE.LinearFilter;
+        tex.minFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        tex.repeat.set(1 / cols, 1 / rows);
+        tex.offset.set(0, 0);
+        
+        var mat = new THREE.SpriteMaterial({
+            map: tex,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            transparent: true
+        });
+        var sprite = new THREE.Sprite(mat);
+        sprite.position.copy(position);
+        sprite.position.z += 2; // keep above the playfield
+        
+        var vfx = ASTEROIDS.CONFIG.VFX;
+        var baseScale = vfx.EXPLOSION_SPRITE_SCALE != null ? vfx.EXPLOSION_SPRITE_SCALE : 4.5;
+        var size = (baseScale * 0.6) + radius * 0.8;
+        sprite.scale.set(size, size, 1);
+        
+        this.scene.add(sprite);
+        this.explosionSprites.push({
+            mesh: sprite,
+            cols: cols,
+            rows: rows,
+            totalFrames: totalFrames,
+            frame: 0,
+            timer: 0,
+            fps: vfx.EXPLOSION_SPRITE_FPS != null ? vfx.EXPLOSION_SPRITE_FPS : 45
+        });
+    }
+    
+    updateExplosionSprites(dt) {
+        for (var i = this.explosionSprites.length - 1; i >= 0; i--) {
+            var e = this.explosionSprites[i];
+            e.timer += dt;
+            var frameDuration = 1 / e.fps;
+            while (e.timer >= frameDuration) {
+                e.timer -= frameDuration;
+                e.frame++;
+                if (e.frame >= e.totalFrames) {
+                    // Destroy sprite after final frame
+                    this.scene.remove(e.mesh);
+                    if (e.mesh.material.map) e.mesh.material.map.dispose();
+                    e.mesh.material.dispose();
+                    this.explosionSprites.splice(i, 1);
+                    break;
+                }
+                var col = e.frame % e.cols;                    // top-left -> bottom-right
+                var row = Math.floor(e.frame / e.cols);
+                e.mesh.material.map.offset.set(col / e.cols, 1 - (row + 1) / e.rows);
+            }
         }
+    }
+    
+    createImpactSparks(position, normal) {
+        // Performance: mesh spark stubs were removed in favor of the spritesheet explosion.
+        // Kept as a no-op to avoid touching call sites asynchronously during gameplay.
     }
     
     createShieldFlash(position, radius) {
