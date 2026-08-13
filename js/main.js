@@ -1161,14 +1161,34 @@ ASTEROIDS.Game = class Game {
 
         this.camera.lookAt(lookTarget.x, lookTarget.y, lookTarget.z);
 
+        // Soft boost FOV: peak only during the short lunge, ease off through the
+        // apex hold, then settle home. Avoids the old hard 58→78 whip.
         var baseFov = visConfig.CAMERA_BASE_FOV || 58;
-        var boostFov = visConfig.CAMERA_BOOST_FOV || 78;
-        var boosting = this.player.isBoosting && this.player.isBoosting();
-        if (boosting) {
-            this.camera.fov += (boostFov - this.camera.fov) * 10 * dt;
-        } else {
-            this.camera.fov += (baseFov - this.camera.fov) * 5 * dt;
+        var boostFov = visConfig.CAMERA_BOOST_FOV || 64;
+        var fovIn = (typeof visConfig.CAMERA_FOV_LERP_IN === 'number') ? visConfig.CAMERA_FOV_LERP_IN : 3.2;
+        var fovOut = (typeof visConfig.CAMERA_FOV_LERP_OUT === 'number') ? visConfig.CAMERA_FOV_LERP_OUT : 2.4;
+        var targetFov = baseFov;
+        var p = this.player;
+        if (p) {
+            var lungeT = 0;
+            var holdT = 0;
+            var lungeMax = (ASTEROIDS.CONFIG.PLAYER && ASTEROIDS.CONFIG.PLAYER.BOOST_DURATION) || 0.28;
+            var holdMax = (ASTEROIDS.CONFIG.PLAYER && ASTEROIDS.CONFIG.PLAYER.BOOST_HOLD_DURATION) || 0.6;
+            if (p.boostActiveTime > 0 && lungeMax > 0) {
+                // Full boost FOV only while lunging forward
+                lungeT = Math.min(1, p.boostActiveTime / lungeMax);
+                // Bias toward peak at start of lunge for a gentle punch, not a slam
+                targetFov = baseFov + (boostFov - baseFov) * (0.55 + 0.45 * lungeT);
+            } else if (p.boostHoldTime > 0 && holdMax > 0) {
+                // Ease FOV halfway back during the apex hold so return isn't a snap
+                holdT = Math.min(1, p.boostHoldTime / holdMax);
+                var holdFov = baseFov + (boostFov - baseFov) * 0.35 * holdT;
+                targetFov = holdFov;
+            }
         }
+        var fovLerp = (targetFov > this.camera.fov) ? fovIn : fovOut;
+        var k = 1 - Math.exp(-fovLerp * dt);
+        this.camera.fov += (targetFov - this.camera.fov) * k;
         this.camera.updateProjectionMatrix();
 
         if (this.backLight) {

@@ -23,7 +23,7 @@ ASTEROIDS.CONFIG = {
         BOOST_DURATION: 0.28,
         // Time spent parked at the boost apex before the return pull begins.
         // Gives the player a beat to turn around and fire on the way home.
-        BOOST_HOLD_DURATION: 1.0,
+        BOOST_HOLD_DURATION: 0.6,
         BOOST_DISTANCE_FRACTION: 0.30, // ~25-28% of playfield toward facing
         // Slightly softer return so the trip home is a usable firing window
         RUBBERBAND_STRENGTH: 6.5,
@@ -101,8 +101,12 @@ ASTEROIDS.CONFIG = {
         PARTICLE_COUNT: 50,
         CAMERA_FORWARD_OFFSET: 2,
         CAMERA_LERP: 4,
-        CAMERA_BOOST_FOV: 78,
+        // Mild boost zoom — stay close to base FOV so the camera eases instead of whipping
+        CAMERA_BOOST_FOV: 64,
         CAMERA_BASE_FOV: 58,
+        // FOV ease rates (higher = snappier). Out is a touch slower for a fluid settle.
+        CAMERA_FOV_LERP_IN: 3.2,
+        CAMERA_FOV_LERP_OUT: 2.4,
         CAMERA_IDLE_BOB_AMP: 0.20,
         CAMERA_IDLE_BOB_FREQ: 0.45,
         CAMERA_LOOK_SPEED: 1.6,
