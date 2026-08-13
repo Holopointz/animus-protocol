@@ -143,7 +143,7 @@ ASTEROIDS.Assets = {
         }
 
         // GLB models, loaded exactly once at boot.
-        loadModel('canister', 'assets/models/shield_canister.glb?v=51');
+        loadModel('canister', 'assets/models/shield_canister.glb');
         loadModel('ship', 'assets/models/spaceship.glb');
     },
 
@@ -158,10 +158,30 @@ ASTEROIDS.Assets = {
     _buildCanisterParts: function() {
         if (this.canisterLoaded || !this.modelsReady['canister']) return;
         var root = this.models['canister'];
+        // Ensure node TRS (Blender export rotation/scale) is in matrixWorld
+        // before we bake meshes into shared InstancedMesh geometries.
+        if (root.updateMatrixWorld) root.updateMatrixWorld(true);
+
         var parts = [[], [], []];
+        // Bake gameplay scale into the geometry. Putting scale on the
+        // InstancedMesh object multiplies per-instance translations too
+        // (mesh.matrix * instanceMatrix), which flings loot off-camera.
+        var cscale = 6;
+        try {
+            if (ASTEROIDS.CONFIG && ASTEROIDS.CONFIG.LOOT && ASTEROIDS.CONFIG.LOOT.BATTERY_CANISTER_SCALE) {
+                cscale = ASTEROIDS.CONFIG.LOOT.BATTERY_CANISTER_SCALE;
+            }
+        } catch (e) {}
+
         root.traverse(function(child) {
             if (!child.isMesh || !child.geometry) return;
-            var name = ((child.name || '') + ' ' + ((child.material && child.material.name) || '')).toLowerCase();
+            // Prefer material name: multi-primitive GLB parts often share a mesh name.
+            var matName = '';
+            if (child.material) {
+                if (child.material.name) matName = child.material.name;
+                else if (child.material.length && child.material[0] && child.material[0].name) matName = child.material[0].name;
+            }
+            var name = ((child.name || '') + ' ' + matName + ' ' + (child.parent && child.parent.name || '')).toLowerCase();
             var idx;
             if (name.indexOf('plasma') !== -1) idx = 0;
             else if (name.indexOf('glass') !== -1) idx = 1;
@@ -172,13 +192,22 @@ ASTEROIDS.Assets = {
             // Rotating the InstancedMesh object instead would rotate the shared
             // translation space and collapse every instance's world Y to ~0.
             g.rotateX(Math.PI / 2);
+            // Bake uniform scale into verts so InstancedMesh.scale stays 1,1,1.
+            if (cscale !== 1) g.scale(cscale, cscale, cscale);
             g.computeBoundingSphere();
+            g.computeBoundingBox();
             parts[idx].push(g);
         });
         this.canisterParts = parts.map(function(arr) {
             return ASTEROIDS.mergeGeometries(arr);
         });
-        this.canisterLoaded = true;
+        // Only mark loaded if at least the shell (or any part) produced geometry.
+        var any = false;
+        for (var pi = 0; pi < this.canisterParts.length; pi++) {
+            if (this.canisterParts[pi]) { any = true; break; }
+        }
+        this.canisterLoaded = any;
+        if (!any) console.error('Canister GLB produced no bakeable mesh geometry');
     }
 };
 

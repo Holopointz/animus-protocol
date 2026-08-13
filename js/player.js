@@ -622,11 +622,13 @@ ASTEROIDS.Player = class Player {
 
     getFoodSpeedMult() {
         if (this.foodBuffTimer <= 0 || this.foodStacks <= 0) return 1;
-        var base = ASTEROIDS.CONFIG.LOOT.FOOD_SPEED_BUFF;
+        // Additive stacks: each food adds FOOD_SPEED_BUFF (0.25) instead of
+        // multiplying, so turn/thrust stay controllable at high stacks.
+        // 1 stack => 1.25x, 2 => 1.50x, ... 5 => 2.25x
+        var step = ASTEROIDS.CONFIG.LOOT.FOOD_SPEED_BUFF;
+        if (typeof step !== 'number' || !(step > 0)) step = 0.25;
         var stacks = Math.min(this.foodStacks, ASTEROIDS.CONFIG.LOOT.FOOD_MAX_STACKS || 5);
-        var mult = 1;
-        for (var i = 0; i < stacks; i++) mult *= base;
-        return mult;
+        return 1 + stacks * step;
     }
 
     getPosition() {

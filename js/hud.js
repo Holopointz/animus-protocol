@@ -359,7 +359,8 @@ ASTEROIDS.HUD = class HUD {
 
         var effectsHTML = '';
         if (player.foodBuffTimer > 0) {
-            effectsHTML += '<span style="color:#66cc44">SPEED x' + (player.foodStacks || 1) + ' ' + player.foodBuffTimer.toFixed(1) + 's</span>';
+            var speedMult = player.getFoodSpeedMult ? player.getFoodSpeedMult() : (1 + 0.25 * (player.foodStacks || 1));
+            effectsHTML += '<span style="color:#66cc44">SPEED x' + speedMult.toFixed(2) + ' (' + player.foodBuffTimer.toFixed(1) + 's)</span>';
         }
         if (player.isBoosting && player.isBoosting()) {
             effectsHTML += '<span style="color:#ffaa00">BOOSTING</span>';

@@ -165,12 +165,9 @@ ASTEROIDS.LootRenderer = class LootRenderer {
         mesh.frustumCulled = false;
         mesh.count = 0;
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        if (rec.battery) {
-            // Orientation is baked into the geometry (assets.js); only scale
-            // lives on the mesh object so per-instance x/y/z map to world space.
-            var cscale = ASTEROIDS.CONFIG.LOOT.BATTERY_CANISTER_SCALE || 6;
-            mesh.scale.set(cscale, cscale, cscale);
-        }
+        // Never put non-1 scale on InstancedMesh: mesh.matrix multiplies the
+        // instance translation (scale 18 turns world pos 5,3 into 90,54).
+        // Battery size is baked into geometry in assets.js / placeholder geo.
         this.group.add(mesh);
         return mesh;
     }
@@ -220,8 +217,11 @@ ASTEROIDS.LootRenderer = class LootRenderer {
 
         // Placeholder battery (cylinder) used until the canister GLB parts are
         // baked. Reuses the shared plasma master material - no per-item alloc.
-        var phGeo = new THREE.CylinderGeometry(0.65, 0.65, 1.1, 10);
+        // Size is already in world units (~real canister after BATTERY_CANISTER_SCALE).
+        // Do NOT put scale on the InstancedMesh object (it multiplies translations).
+        var phGeo = new THREE.CylinderGeometry(1.15, 1.15, 2.4, 12);
         phGeo.rotateX(Math.PI / 2);
+        phGeo.computeBoundingSphere();
         this.placeholder = this._inst(phGeo, ASTEROIDS.Materials.master[0], this.capacity, true);
 
         this.attractPool = new ASTEROIDS.SpritePool(this.group, 16, ASTEROIDS.LootItem.createSmallSprite());
@@ -231,6 +231,7 @@ ASTEROIDS.LootRenderer = class LootRenderer {
         if (this.batteryBuilt || !ASTEROIDS.Assets.canisterLoaded) return false;
         var parts = ASTEROIDS.Assets.canisterParts;
         var masters = ASTEROIDS.Materials.master;
+        var built = 0;
         for (var i = 0; i < 3; i++) {
             if (!parts[i] || !masters[i]) {
                 this.batteries.push(null);
@@ -240,15 +241,24 @@ ASTEROIDS.LootRenderer = class LootRenderer {
             m.frustumCulled = false;
             m.count = 0;
             m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-            // Orientation is baked into the geometry (assets.js); only scale
-            // lives on the mesh object so per-instance x/y/z map to world space.
-            var cscale = ASTEROIDS.CONFIG.LOOT.BATTERY_CANISTER_SCALE || 6;
-            m.scale.set(cscale, cscale, cscale);
+            // Scale + orientation are baked into geometry in assets.js.
+            // Keep InstancedMesh scale at 1 so instance translations stay in world units.
             this.group.add(m);
             this.batteries.push(m);
+            built++;
         }
-        this.group.remove(this.placeholder);
-        this.placeholder = null;
+        if (!built) return false;
+        if (this.placeholder) {
+            this.group.remove(this.placeholder);
+            // Drop placeholder from _instanced tracking if present
+            for (var pi = this._instanced.length - 1; pi >= 0; pi--) {
+                if (this._instanced[pi] && this._instanced[pi].mesh === this.placeholder) {
+                    this._instanced.splice(pi, 1);
+                    break;
+                }
+            }
+            this.placeholder = null;
+        }
         this.batteryBuilt = true;
         return true;
     }
@@ -258,8 +268,9 @@ ASTEROIDS.LootRenderer = class LootRenderer {
         var d = this._dummy;
         d.position.set(item.x, item.y, item.z || 0);
         d.rotation.set(item.rotX, item.rotY, item.rotZ);
+        // Pulse only. Base canister size is baked into geometry so world
+        // positions stay correct under InstancedMesh composition.
         var s = 1 + Math.sin(item.pulseOffset) * 0.2;
-        if (mesh === this.placeholder) s *= 1.6; // placeholder reads closer to model size
         d.scale.set(s, s, s);
         d.updateMatrix();
         mesh.setMatrixAt(item._index, d.matrix);

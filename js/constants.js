@@ -55,7 +55,9 @@ ASTEROIDS.CONFIG = {
         FOOD_CHANCE: 0.35,
         SCRAP_CHANCE: 0.40,
         BATTERY_SHIELD: 50,
-        FOOD_SPEED_BUFF: 1.45,
+        // Additive per food stack: mult = 1 + stacks * FOOD_SPEED_BUFF
+        // (0.25 => x1.25, x1.50, x1.75, x2.00, x2.25 at 1..5 stacks)
+        FOOD_SPEED_BUFF: 0.25,
         FOOD_DURATION: 6.0,
         FOOD_MAX_STACKS: 5,
         SCRAP_HEAL: 30,
@@ -63,7 +65,7 @@ ASTEROIDS.CONFIG = {
         FOOD_POINTS: 5,
         SCRAP_POINTS: 15,
         COLLISION_RADIUS: 2.4,
-        BATTERY_CANISTER_SCALE: 18,
+        BATTERY_CANISTER_SCALE: 6,
         DRIFT_SPEED: 1.8,
         LIFETIME: 28.0
     },
