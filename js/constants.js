@@ -24,9 +24,9 @@ ASTEROIDS.CONFIG = {
         // Time spent parked at the boost apex before the return pull begins.
         // Gives the player a beat to turn around and fire on the way home.
         BOOST_HOLD_DURATION: 0.6,
-        BOOST_DISTANCE_FRACTION: 0.30, // ~25-28% of playfield toward facing
+        BOOST_DISTANCE_FRACTION: 0.32, // ~25-28% of playfield toward facing
         // Slightly softer return so the trip home is a usable firing window
-        RUBBERBAND_STRENGTH: 6.5,
+        RUBBERBAND_STRENGTH: 5.5,
         RUBBERBAND_DAMPING: 0.97,
         CENTER_HOLD_RADIUS: 1.2,
         MAX_OFFSET: 55.0,
