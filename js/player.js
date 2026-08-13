@@ -392,7 +392,8 @@ ASTEROIDS.Player = class Player {
         }
 
         if (ASTEROIDS.Sound && ASTEROIDS.Sound.setEngineThrust) {
-            ASTEROIDS.Sound.setEngineThrust(thrustLevel > 0 || this.boostActiveTime > 0 ? 1 : 0);
+            // Engine hum follows manual thrust only — boost must produce no synth tone.
+            ASTEROIDS.Sound.setEngineThrust(thrustLevel > 0 ? 1 : 0);
             if (thrustLevel > 0 && ASTEROIDS.Sound.thrustPulse && Math.random() < 0.02) ASTEROIDS.Sound.thrustPulse();
         }
     }
