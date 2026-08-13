@@ -28,6 +28,18 @@ ASTEROIDS.LootItem = class LootItem {
         // Attraction particle streams
         this._attractParticles = [];
         this._attractActive = false;
+
+        // Shared shield-canister GLB (battery only)
+        this._modelReady = false;
+        this._modelApplied = false;
+        this._usesModel = (this.type === 'battery');
+        if (this._usesModel) {
+            var self = this;
+            ASTEROIDS.LootItem._loadCanisterModel(function() {
+                self._modelReady = true;
+                if (self.mesh) self._applyCanisterModel();
+            });
+        }
     }
     
     createMesh() {
@@ -35,28 +47,46 @@ ASTEROIDS.LootItem = class LootItem {
         
         switch(this.type) {
             case 'battery':
-                // Glowing cylinder with emissive animation
-                var cylGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 8);
-                var cylMat = new THREE.MeshStandardMaterial({
-                    color: 0x3399ff,
-                    emissive: 0x3399ff,
-                    emissiveIntensity: 1.0,
-                    roughness: 0.3,
-                    metalness: 0.6
+                // Shield canister model (Blender export). Shared GLB is loaded async and
+                // swapped in via _applyCanisterModel(); until ready we show a placeholder.
+                var phGeo = new THREE.CylinderGeometry(0.65, 0.65, 1.1, 10);
+                phGeo.rotateX(Math.PI / 2);
+                var phMat = new THREE.MeshStandardMaterial({
+                    color: 0x88bbff,
+                    emissive: 0x2266cc,
+                    emissiveIntensity: 2.2,
+                    roughness: 0.85,
+                    metalness: 0.5,
+                    transparent: true,
+                    opacity: 0.7
                 });
-                var cylinder = new THREE.Mesh(cylGeo, cylMat);
-                cylinder.rotation.x = Math.PI / 2;
-                group.add(cylinder);
-                group.userData.emissiveMesh = cylinder;
-                
+                var placeholder = new THREE.Mesh(phGeo, phMat);
+                placeholder.rotation.y = 0;
+                group.add(placeholder);
+                group.userData.emissiveMesh = placeholder;
+                group.userData.placeholder = placeholder;
+                group.userData.phGeo = phGeo;
+                group.userData.phMat = phMat;
+
+                // Small blue point light so the canister reads as a glowing pickup
+                var canLight = new THREE.PointLight(0x66ccff, 4, 4.5);
+                canLight.position.set(0, 0, 0.8);
+                group.add(canLight);
+                group.userData.canLight = canLight;
+
                 // Glow sphere around it
                 var glowGeo = new THREE.SphereGeometry(0.5, 8, 8);
                 var glowMat = new THREE.MeshBasicMaterial({
                     color: 0x3399ff,
                     transparent: true,
-                    opacity: 0.3
+                    opacity: 0.0
                 });
                 var glow = new THREE.Mesh(glowGeo, glowMat);
+
+                // Shrink blue sphere to a microscopic speck and turn off rendering to hide it
+                glow.scale.set(0.001, 0.001, 0.001);
+                glow.visible = false; 
+
                 group.add(glow);
                 group.userData.glowMesh = glow;
                 break;
@@ -126,7 +156,115 @@ ASTEROIDS.LootItem = class LootItem {
         
         return group;
     }
-    
+    // 3D canister model helpers ----
+    _applyCanisterModel() {
+        if (!ASTEROIDS.LootItem._canisterModel || this._modelApplied || !this.mesh) return;
+        this._modelApplied = true;
+        var clone = ASTEROIDS.LootItem._canisterModel.clone(true);
+        var self = this;
+        var texLoader = new THREE.TextureLoader();
+        
+        // Load Diffuse (Color data)
+        var diffuseMap = texLoader.load('assets/textures/difuse_canister.png');
+        diffuseMap.flipY = false; // CRUCIAL: Fixes the upside-down Blender texture alignment
+        diffuseMap.colorSpace = THREE.SRGBColorSpace; // Keeps colors vibrant like Blender
+
+        // Load Normal (Math data)
+        var normalMap = texLoader.load('assets/textures/normal_canister.jpg');
+        normalMap.flipY = false;
+        normalMap.colorSpace = THREE.NoColorSpace; // Treats pixels as raw vectors
+
+        // Load Roughness (Math data)
+        var roughMap = texLoader.load('assets/textures/roughness_canister.png');
+        roughMap.flipY = false;
+        roughMap.colorSpace = THREE.NoColorSpace;
+
+        clone.traverse(function(child) {
+            if (!child.isMesh) return;
+            var mats = Array.isArray(child.material) ? child.material : [child.material];
+            var newMats = [];
+            for (var i = 0; i < mats.length; i++) {
+                var m = mats[i];
+                if (!m) continue;
+                var matName = (m.name || '').toLowerCase();
+                var childName = (child.name || '').toLowerCase();
+                var cm = m.clone();
+                cm.transparent = true;
+                cm.toneMapped = false;
+                cm.depthWrite = true;
+                if (window.ASTEROIDS.envMap) {
+                    cm.envMap = window.ASTEROIDS.envMap;
+                }
+                if (childName.indexOf('plasma') !== -1 || matName.indexOf('plasma') !== -1) {
+                    // Inner plasma: animated glowing light blue
+                    cm.color = new THREE.Color(0x002244);
+                    cm.emissive = new THREE.Color(0x00aaff);
+                    cm.emissiveIntensity = 1.2;
+                    cm.roughness = 0.15;
+                    cm.metalness = 0.0;
+                    cm.envMapIntensity = 0.6;
+                    cm.opacity = 0.95;
+                    cm.depthWrite = false;
+                } else if (matName.indexOf('glass') !== -1) {
+                    // Glass portion: physical glass shader with faint cyan tint
+                    cm.color = new THREE.Color(0xa8d8ff);
+                    cm.metalness = 0.0;
+                    cm.roughness = 0.12;
+                    cm.transmission = 0.55;
+                    cm.transparent = true;
+                    cm.opacity = 0.26;
+                    cm.depthWrite = false;
+                    cm.envMapIntensity = 1.15;
+                    cm.emissive = new THREE.Color(0x66ddff);
+                    cm.emissiveIntensity = 0.2;
+                } else {
+                    // Canister shell
+                    cm.map = diffuseMap;
+                    cm.normalMap = normalMap;
+                    cm.roughnessMap = roughMap;
+                    cm.metalnessMap = null;
+                    
+                    // FIX: Allow maps to dictate values. 
+                    // If you have metal caps, set metalness to 1.0 so the metal reflection math turns on.
+                    cm.metalness = 0.2; 
+                    cm.roughness = 1.0; // Acts as a 1:1 multiplier for your roughness map
+                    
+                    cm.emissive = new THREE.Color(0x000000);
+                    cm.emissiveIntensity = 0.0;
+                    cm.envMapIntensity = 1.0;
+                    cm.opacity = 1;
+                    cm.transparent = false;
+                    cm.depthWrite = true;
+                }
+                cm.needsUpdate = true;
+                newMats.push(cm);
+            }
+            child.material = newMats.length === 1 ? newMats[0] : newMats;
+        });
+
+
+        // Lay the canister sideways so it reads like a pickup in the top-down XY arena
+        clone.rotation.set(Math.PI / 2, 0, 0);
+        clone.scale.set(6, 6, 6);
+        // Replace the placeholder with the real model
+        var ph = this.mesh.userData.placeholder;
+        if (ph) {
+            this.mesh.remove(ph);
+            if (this.mesh.userData.phGeo) this.mesh.userData.phGeo.dispose();
+            if (this.mesh.userData.phMat) this.mesh.userData.phMat.dispose();
+            this.mesh.userData.placeholder = null;
+            this.mesh.userData.emissiveMesh = null;
+        }
+        this.mesh.add(clone);
+        this.mesh.userData.model = clone;
+        this.mesh.userData.plasmaMesh = null;
+        clone.traverse(function(child) {
+            if (child.isMesh && (child.name || '').toLowerCase().indexOf('plasma') !== -1) {
+                self.mesh.userData.plasmaMesh = child;
+            }
+        });
+    }
+
     update(dt, playerPos) {
         if (this.collected) return;
         
@@ -154,14 +292,21 @@ ASTEROIDS.LootItem = class LootItem {
             this.mesh.userData.glowMesh.material.opacity = 0.2 + Math.sin(this.pulseOffset) * 0.15;
         }
         
-        // Emissive intensity animation (pulse 0.5-1.5)
-        if (this.mesh.userData.emissiveMesh && this.mesh.userData.emissiveMesh.material.emissiveIntensity !== undefined) {
-            this.mesh.userData.emissiveMesh.material.emissiveIntensity = 1.0 + Math.sin(this.pulseOffset) * 0.5;
+        // Emissive intensity animation: placeholder cylinder OR loaded plasma mesh
+        var emMesh = this.mesh.userData.emissiveMesh || this.mesh.userData.plasmaMesh;
+        if (emMesh && emMesh.material && emMesh.material.emissiveIntensity !== undefined) {
+            emMesh.material.emissiveIntensity = (this._usesModel && this._modelApplied ? 2.2 : 1.0) + Math.sin(this.pulseOffset) * 0.7;
+        }
+        if (this.mesh.userData.canLight) {
+            this.mesh.userData.canLight.intensity = 3.0 + Math.sin(this.pulseOffset) * 1.4;
         }
         
         // Rotate
         this.mesh.rotation.y += dt * 2;
         this.mesh.rotation.x += dt * 1.5;
+        if (this.mesh.userData.model) {
+            this.mesh.userData.model.rotation.y += dt * 1.2;
+        }
         
         // Particle attraction when player is within 8 units
         if (playerPos) {
@@ -293,6 +438,29 @@ ASTEROIDS.LootItem = class LootItem {
                 break;
         }
     }
+    // Shared shield canister model + loader (battery only)
+    static _loadCanisterModel(cb) {
+        if (ASTEROIDS.LootItem._canisterModel) { cb && cb(); return; }
+        if (ASTEROIDS.LootItem._canisterLoading) {
+            var cbs = ASTEROIDS.LootItem._canisterCbs = ASTEROIDS.LootItem._canisterCbs || [];
+            cbs.push(cb);
+            return;
+        }
+        ASTEROIDS.LootItem._canisterLoading = true;
+        ASTEROIDS.LootItem._canisterCbs = [cb];
+        var loader = new THREE.GLTFLoader();
+        loader.load('assets/models/shield_canister.glb?v=51', function(gltf) {
+            ASTEROIDS.LootItem._canisterModel = gltf.scene;
+            ASTEROIDS.LootItem._canisterLoading = false;
+            ASTEROIDS.LootItem._canisterCbs.forEach(function(f) { f && f(); });
+            ASTEROIDS.LootItem._canisterCbs = [];
+        }, undefined, function(err) {
+            console.error('Error loading shield canister model:', err);
+            ASTEROIDS.LootItem._canisterLoading = false;
+            ASTEROIDS.LootItem._canisterCbs = [];
+        });
+    }
+
 };
 
 // Loot manager
