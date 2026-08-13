@@ -22,6 +22,7 @@ ASTEROIDS.Player = class Player {
         this.boostCooldown = 0;
         this.invulnerable = 0;
         this.foodBuffTimer = 0;
+        this.foodStacks = 0;
 
         // Boost / rubberband state
         this.boosting = false;
@@ -39,6 +40,11 @@ ASTEROIDS.Player = class Player {
 
         // Engine/damage/death particles (pooled sprites - created once, zero per-frame allocation)
         this.particlePool = new ASTEROIDS.SpritePool(scene, 120, this.spriteTexture);
+
+        // Swept-collision bookkeeping: previous frame position, so loot checks
+        // run a segment (prev -> current) instead of a point. This catches every
+        // loot item the ship flies through, including the single-frame boost lunge.
+        this._prevPosition = new THREE.Vector3();
 
         // Motion trail (pooled sprites - created once, zero per-frame allocation)
         this.trailPositions = [];
@@ -198,6 +204,7 @@ ASTEROIDS.Player = class Player {
 
     spawn(x, y, z) {
         this.group.position.set(x || 0, y || 0, z || 0);
+        if (this._prevPosition) this._prevPosition.copy(this.group.position);
         this.homePosition.set(0, 0, 0);
         this.velocity.set(0, 0, 0);
         this.rotation = 0;
@@ -208,6 +215,7 @@ ASTEROIDS.Player = class Player {
         this.dead = false;
         this.boostCooldown = 0;
         this.foodBuffTimer = 0;
+        this.foodStacks = 0;
         this.boosting = false;
         this.boostActiveTime = 0;
         this._boostLungeRemaining = 0;
@@ -254,6 +262,11 @@ ASTEROIDS.Player = class Player {
     update(dt, bullets) {
         if (!this.ready) return;
 
+        // Swept-collision bookkeeping: remember where the ship was before this
+        // frame's movement so loot checks can test the whole swept segment
+        // (catches loot passed during the single-frame boost lunge).
+        this._prevPosition.copy(this.group.position);
+
         var cfg = ASTEROIDS.CONFIG.PLAYER;
         var rotateLeft = this.isKey('a') || this.isKey('arrowleft');
         var rotateRight = this.isKey('d') || this.isKey('arrowright');
@@ -262,21 +275,25 @@ ASTEROIDS.Player = class Player {
         var shooting = this.isKey(' ') || this.isKey('space');
         var boostKey = this.isKey('shift') || this.isKey('b');
 
-        // Rotate ship facing
-        if (rotateLeft) this.rotation += cfg.ROTATION_SPEED * dt;
-        if (rotateRight) this.rotation -= cfg.ROTATION_SPEED * dt;
+        // Rotate ship facing — scaled by the food speed multiplier so each
+        // stacked speed boost ALSO makes A/D turning faster (turn boost is the
+        // most important advantage for facing asteroids before they arrive).
+        var turnMult = this.getFoodSpeedMult();
+        if (rotateLeft) this.rotation += cfg.ROTATION_SPEED * turnMult * dt;
+        if (rotateRight) this.rotation -= cfg.ROTATION_SPEED * turnMult * dt;
         this.group.rotation.z = this.rotation;
 
         var dir = this.getFacingDir();
         var thrustLevel = 0;
+        var foodMult = this.getFoodSpeedMult();
 
         // Mild manual thrust (scaled) — primary mobility is BOOST + rubberband
         if (thrust) {
-            this.velocity.addScaledVector(dir, cfg.THRUST_POWER * cfg.MANUAL_THRUST_SCALE * dt);
+            this.velocity.addScaledVector(dir, cfg.THRUST_POWER * cfg.MANUAL_THRUST_SCALE * foodMult * dt);
             thrustLevel = 1;
         }
         if (reverse) {
-            this.velocity.addScaledVector(dir, -cfg.THRUST_POWER * cfg.MANUAL_THRUST_SCALE * 0.45 * dt);
+            this.velocity.addScaledVector(dir, -cfg.THRUST_POWER * cfg.MANUAL_THRUST_SCALE * 0.45 * foodMult * dt);
             thrustLevel = Math.max(thrustLevel, 0.4);
         }
 
@@ -296,16 +313,19 @@ ASTEROIDS.Player = class Player {
             }
         }
 
-        // Rubberband spring back to home (screen center)
-        // Disabled only during the brief boost lunge peak so dodge lands first
+        // Rubberband return to home (screen center) — frame-rate-independent
+        // exponential ease. The ship is pulled smoothly back in ONE clean
+        // motion (monotonic, no overshoot) regardless of frame time, so it
+        // never bounces back and forth after a boost. Residual velocity is
+        // killed proportionally to the position ease so the ship settles.
         var rubberbandActive = this.boostActiveTime <= 0;
         if (rubberbandActive) {
             var toHome = this.homePosition.clone().sub(this.group.position);
             var distHome = toHome.length();
             if (distHome > cfg.CENTER_HOLD_RADIUS) {
-                // Spring force toward center
-                var spring = toHome.multiplyScalar(cfg.RUBBERBAND_STRENGTH * dt);
-                this.velocity.add(spring);
+                var ease = 1 - Math.exp(-cfg.RUBBERBAND_STRENGTH * dt);
+                this.group.position.lerp(this.homePosition, ease);
+                this.velocity.multiplyScalar(Math.max(0, 1 - ease));
             } else {
                 // Soft settle near center
                 this.velocity.multiplyScalar(0.92);
@@ -324,7 +344,13 @@ ASTEROIDS.Player = class Player {
         this.shootCooldown = Math.max(0, this.shootCooldown - dt);
         this.boostCooldown = Math.max(0, this.boostCooldown - dt);
         this.invulnerable = Math.max(0, this.invulnerable - dt);
-        if (this.foodBuffTimer > 0) this.foodBuffTimer -= dt;
+        if (this.foodBuffTimer > 0) {
+            this.foodBuffTimer -= dt;
+            if (this.foodBuffTimer <= 0) {
+                this.foodBuffTimer = 0;
+                this.foodStacks = 0;
+            }
+        }
 
         // Shield regen
         if (this.shield < cfg.SHIELD_MAX) {
@@ -332,7 +358,7 @@ ASTEROIDS.Player = class Player {
         }
 
         // Speed cap
-        var speedMult = this.foodBuffTimer > 0 ? ASTEROIDS.CONFIG.LOOT.FOOD_SPEED_BUFF : 1;
+        var speedMult = this.getFoodSpeedMult();
         var maxSpeed = cfg.MAX_SPEED * speedMult;
         if (this.boostActiveTime > 0) maxSpeed *= cfg.BOOST_MULTIPLIER * 1.8;
         if (this.velocity.length() > maxSpeed) {
@@ -589,11 +615,26 @@ ASTEROIDS.Player = class Player {
     }
 
     applyFoodBuff() {
-        this.foodBuffTimer = ASTEROIDS.CONFIG.LOOT.FOOD_DURATION;
+        var config = ASTEROIDS.CONFIG.LOOT;
+        this.foodStacks = Math.min(this.foodStacks + 1, config.FOOD_MAX_STACKS || 5);
+        this.foodBuffTimer = config.FOOD_DURATION;
+    }
+
+    getFoodSpeedMult() {
+        if (this.foodBuffTimer <= 0 || this.foodStacks <= 0) return 1;
+        var base = ASTEROIDS.CONFIG.LOOT.FOOD_SPEED_BUFF;
+        var stacks = Math.min(this.foodStacks, ASTEROIDS.CONFIG.LOOT.FOOD_MAX_STACKS || 5);
+        var mult = 1;
+        for (var i = 0; i < stacks; i++) mult *= base;
+        return mult;
     }
 
     getPosition() {
         return this.group.position;
+    }
+
+    getPrevPosition() {
+        return this._prevPosition || this.group.position;
     }
 
     getRadius() {

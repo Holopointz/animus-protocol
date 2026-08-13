@@ -142,6 +142,18 @@ ASTEROIDS.Game = class Game {
         
         this.asteroidManager = new ASTEROIDS.AsteroidManager(this.scene);
         this.lootManager = new ASTEROIDS.LootManager(this.scene);
+        // Eagerly swap in the real GLB canister meshes as soon as the model is
+        // ready so shields never render as the tiny fallback placeholder.
+        if (ASTEROIDS.Assets && ASTEROIDS.Assets.canisterLoaded) {
+            this.lootManager.renderer._ensureBattery();
+        } else if (ASTEROIDS.Assets && ASTEROIDS.Assets.loadAll) {
+            // Cold boot: the GLB may still be loading; build the real canister
+            // meshes the moment preload completes so no tiny placeholder shows.
+            var renderer = this.lootManager.renderer;
+            ASTEROIDS.Assets.loadAll(function() {
+                renderer._ensureBattery();
+            });
+        }
         // Instanced pools: bullets + explosions share fixed objects, zero per-frame allocs.
         this.bulletPool = new ASTEROIDS.BulletPool(this.scene);
         this.explosionSpritePool = new ASTEROIDS.ExplosionSpritePool(this.scene, 24);

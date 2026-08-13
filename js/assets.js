@@ -168,6 +168,10 @@ ASTEROIDS.Assets = {
             else idx = 2;
             var g = child.geometry.clone();
             g.applyMatrix4(child.matrixWorld);
+            // Bake the 'lay it sideways' orientation into the geometry itself.
+            // Rotating the InstancedMesh object instead would rotate the shared
+            // translation space and collapse every instance's world Y to ~0.
+            g.rotateX(Math.PI / 2);
             g.computeBoundingSphere();
             parts[idx].push(g);
         });

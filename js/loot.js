@@ -97,7 +97,7 @@ ASTEROIDS.LootItem = class LootItem {
         switch (this.type) {
             case 'battery': player.repairShield(config.BATTERY_SHIELD); break;
             case 'scrap': player.heal(config.SCRAP_HEAL); break;
-            case 'food': player.foodBuffTimer = config.FOOD_DURATION; break;
+            case 'food': if (player.applyFoodBuff) player.applyFoodBuff(); else player.foodBuffTimer = config.FOOD_DURATION; break;
         }
     }
 };
@@ -166,8 +166,10 @@ ASTEROIDS.LootRenderer = class LootRenderer {
         mesh.count = 0;
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         if (rec.battery) {
-            mesh.rotation.set(Math.PI / 2, 0, 0);
-            mesh.scale.set(6, 6, 6);
+            // Orientation is baked into the geometry (assets.js); only scale
+            // lives on the mesh object so per-instance x/y/z map to world space.
+            var cscale = ASTEROIDS.CONFIG.LOOT.BATTERY_CANISTER_SCALE || 6;
+            mesh.scale.set(cscale, cscale, cscale);
         }
         this.group.add(mesh);
         return mesh;
@@ -220,7 +222,7 @@ ASTEROIDS.LootRenderer = class LootRenderer {
         // baked. Reuses the shared plasma master material - no per-item alloc.
         var phGeo = new THREE.CylinderGeometry(0.65, 0.65, 1.1, 10);
         phGeo.rotateX(Math.PI / 2);
-        this.placeholder = this._inst(phGeo, ASTEROIDS.Materials.master[0]);
+        this.placeholder = this._inst(phGeo, ASTEROIDS.Materials.master[0], this.capacity, true);
 
         this.attractPool = new ASTEROIDS.SpritePool(this.group, 16, ASTEROIDS.LootItem.createSmallSprite());
     }
@@ -238,9 +240,10 @@ ASTEROIDS.LootRenderer = class LootRenderer {
             m.frustumCulled = false;
             m.count = 0;
             m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-            // Match the original loader: lay canister sideways + 6x pickup scale.
-            m.rotation.set(Math.PI / 2, 0, 0);
-            m.scale.set(6, 6, 6);
+            // Orientation is baked into the geometry (assets.js); only scale
+            // lives on the mesh object so per-instance x/y/z map to world space.
+            var cscale = ASTEROIDS.CONFIG.LOOT.BATTERY_CANISTER_SCALE || 6;
+            m.scale.set(cscale, cscale, cscale);
             this.group.add(m);
             this.batteries.push(m);
         }
@@ -387,9 +390,9 @@ ASTEROIDS.LootManager = class LootManager {
     spawnRandomLoot(position) {
         var config = ASTEROIDS.CONFIG.LOOT;
         var weights = [
-            ['battery', config.BATTERY_WEIGHT],
-            ['food', config.FOOD_WEIGHT],
-            ['scrap', config.SCRAP_WEIGHT]
+            ['battery', config.BATTERY_CHANCE],
+            ['food', config.FOOD_CHANCE],
+            ['scrap', config.SCRAP_CHANCE]
         ];
         var total = 0, i;
         for (i = 0; i < weights.length; i++) total += weights[i][1];
@@ -423,15 +426,37 @@ ASTEROIDS.LootManager = class LootManager {
             var it = this.items[i];
             if (it.isExpired() || it.collected) continue;
             var pp = player.getPosition ? player.getPosition() : player;
-            var dx = it.x - pp.x;
-            var dy = it.y - pp.y;
-            var dz = (it.z || 0) - pp.z;
+            // Swept collision: get the closest point on the segment from the ship's
+            // previous frame position to its current position, so loot the ship
+            // passes THROUGH (including the single-frame boost lunge) is caught.
+            // Plain Vector3 callers (no getPrevPosition) fall back to a point test.
+            var prev = (player.getPrevPosition && player.getPrevPosition()) || pp;
+            var segX = pp.x - prev.x;
+            var segY = pp.y - prev.y;
+            var segZ = pp.z - prev.z;
+            var len2 = segX * segX + segY * segY + segZ * segZ;
+            var cx, cy, cz;
+            if (len2 > 0.000001) {
+                var t = ((it.x - prev.x) * segX + (it.y - prev.y) * segY + ((it.z || 0) - prev.z) * segZ) / len2;
+                if (t < 0) t = 0;
+                else if (t > 1) t = 1;
+                cx = prev.x + t * segX;
+                cy = prev.y + t * segY;
+                cz = prev.z + t * segZ;
+            } else {
+                cx = pp.x; cy = pp.y; cz = pp.z;
+            }
+            var dx = it.x - cx;
+            var dy = it.y - cy;
+            var dz = (it.z || 0) - cz;
             var dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            var radius = it.type === 'battery' ? 2.0 : 1.0;
+            // Generous pickup radius: loot visual + player hull, so boosts and
+            // fly-bys collect cleanly (config COLLISION_RADIUS is the base catch).
+            var radius = ASTEROIDS.CONFIG.LOOT.COLLISION_RADIUS + (player.getRadius ? player.getRadius() : 0);
             if (dist < radius) {
                 it.collected = true;
-                if (ASTEROIDS.Sound && ASTEROIDS.Sound.playLoot) {
-                    try { ASTEROIDS.Sound.playLoot(); } catch (e) {}
+                if (ASTEROIDS.Sound && ASTEROIDS.Sound.lootPickup) {
+                    try { ASTEROIDS.Sound.lootPickup(it.type); } catch (e) {}
                 }
                 var pts = it.getPoints();
                 if (pts && player.addScore) player.addScore(pts);

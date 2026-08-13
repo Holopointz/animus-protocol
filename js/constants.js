@@ -23,7 +23,7 @@ ASTEROIDS.CONFIG = {
         BOOST_DURATION: 0.28,
         BOOST_DISTANCE_FRACTION: 0.28, // ~25-28% of playfield toward facing
         RUBBERBAND_STRENGTH: 6.5,
-        RUBBERBAND_DAMPING: 0.90,
+        RUBBERBAND_DAMPING: 0.97,
         CENTER_HOLD_RADIUS: 1.2,
         MAX_OFFSET: 55.0,
         // Mild manual thrust still allowed but spring pulls home
@@ -57,11 +57,13 @@ ASTEROIDS.CONFIG = {
         BATTERY_SHIELD: 50,
         FOOD_SPEED_BUFF: 1.45,
         FOOD_DURATION: 6.0,
+        FOOD_MAX_STACKS: 5,
         SCRAP_HEAL: 30,
         BATTERY_POINTS: 10,
         FOOD_POINTS: 5,
         SCRAP_POINTS: 15,
         COLLISION_RADIUS: 2.4,
+        BATTERY_CANISTER_SCALE: 18,
         DRIFT_SPEED: 1.8,
         LIFETIME: 28.0
     },
