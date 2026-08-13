@@ -16,12 +16,16 @@ ASTEROIDS.CONFIG = {
         SHIELD_REGEN: 1.0,
         LIVES: 3,
         RESPAWN_INVULNERABILITY: 3.0,
-        // Boost: lunge forward then rubberband home to center
+        // Boost: lunge forward, hold apex ~1s (spin/shoot window), then rubberband home
         BOOST_MULTIPLIER: 1.25,
         BOOST_BURST: 42.0,
         BOOST_COOLDOWN: 1.4,
         BOOST_DURATION: 0.28,
-        BOOST_DISTANCE_FRACTION: 0.28, // ~25-28% of playfield toward facing
+        // Time spent parked at the boost apex before the return pull begins.
+        // Gives the player a beat to turn around and fire on the way home.
+        BOOST_HOLD_DURATION: 1.0,
+        BOOST_DISTANCE_FRACTION: 0.30, // ~25-28% of playfield toward facing
+        // Slightly softer return so the trip home is a usable firing window
         RUBBERBAND_STRENGTH: 6.5,
         RUBBERBAND_DAMPING: 0.97,
         CENTER_HOLD_RADIUS: 1.2,
@@ -102,7 +106,7 @@ ASTEROIDS.CONFIG = {
         CAMERA_IDLE_BOB_AMP: 0.20,
         CAMERA_IDLE_BOB_FREQ: 0.45,
         CAMERA_LOOK_SPEED: 1.6,
-        CAMERA_LOOK_PITCH_MAX: 0.55,
+        CAMERA_LOOK_PITCH_MAX: 0.75,
         CAMERA_LOOK_YAW_MAX: 1.15,
         CAMERA_MOUSE_SENS: 0.0022,
         STAR_PARALLAX_INNER_RADIUS: 150,

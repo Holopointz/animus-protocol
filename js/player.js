@@ -24,9 +24,10 @@ ASTEROIDS.Player = class Player {
         this.foodBuffTimer = 0;
         this.foodStacks = 0;
 
-        // Boost / rubberband state
+        // Boost / rubberband state: lunge -> hold apex -> return home
         this.boosting = false;
         this.boostActiveTime = 0;
+        this.boostHoldTime = 0;
         this.homePosition = new THREE.Vector3(0, 0, 0);
         this._boostLungeRemaining = 0;
 
@@ -218,6 +219,7 @@ ASTEROIDS.Player = class Player {
         this.foodStacks = 0;
         this.boosting = false;
         this.boostActiveTime = 0;
+        this.boostHoldTime = 0;
         this._boostLungeRemaining = 0;
         this.thrusterLight.intensity = 0;
         this.trailPositions = [];
@@ -302,23 +304,35 @@ ASTEROIDS.Player = class Player {
             this.boost();
         }
 
-        // Active boost lunge (short high impulse window)
+        // Boost phases:
+        //  1) Lunge  — short high-impulse window (boostActiveTime)
+        //  2) Hold   — park at apex ~1s so player can spin and line up shots
+        //  3) Return — rubberband home for the firing pass on the way back
         if (this.boostActiveTime > 0) {
             this.boostActiveTime -= dt;
             // Keep pushing slightly during the lunge for snappy feel
             this.velocity.addScaledVector(dir, cfg.BOOST_BURST * 0.35 * dt / Math.max(cfg.BOOST_DURATION, 0.05));
             if (this.boostActiveTime <= 0) {
-                this.boosting = false;
                 this.boostActiveTime = 0;
+                // Arrive at apex: kill residual velocity and begin the hold beat.
+                this.velocity.set(0, 0, 0);
+                this.boostHoldTime = (typeof cfg.BOOST_HOLD_DURATION === 'number')
+                    ? cfg.BOOST_HOLD_DURATION : 1.0;
+            }
+        } else if (this.boostHoldTime > 0) {
+            this.boostHoldTime -= dt;
+            // Stay put at the apex — heavy damp so the ship parks cleanly.
+            this.velocity.multiplyScalar(0.75);
+            if (this.boostHoldTime <= 0) {
+                this.boostHoldTime = 0;
+                this.boosting = false;
             }
         }
 
-        // Rubberband return to home (screen center) — frame-rate-independent
-        // exponential ease. The ship is pulled smoothly back in ONE clean
-        // motion (monotonic, no overshoot) regardless of frame time, so it
-        // never bounces back and forth after a boost. Residual velocity is
-        // killed proportionally to the position ease so the ship settles.
-        var rubberbandActive = this.boostActiveTime <= 0;
+        // Rubberband return only after lunge + hold are done. Frame-rate
+        // independent exponential ease: one clean monotonic pull home so the
+        // player can rotate and shoot on the return trip (no bounce/overshoot).
+        var rubberbandActive = this.boostActiveTime <= 0 && this.boostHoldTime <= 0;
         if (rubberbandActive) {
             var toHome = this.homePosition.clone().sub(this.group.position);
             var distHome = toHome.length();
@@ -333,10 +347,13 @@ ASTEROIDS.Player = class Player {
             }
         }
 
-        // Extra damping while returning from a boost
-        if (!this.boosting && this.boostCooldown > 0) {
+        // Extra damping while returning from a boost (after hold ends)
+        if (rubberbandActive && this.boostCooldown > 0) {
             this.velocity.multiplyScalar(cfg.RUBBERBAND_DAMPING);
-        } else {
+        } else if (this.boostActiveTime <= 0 && this.boostHoldTime <= 0) {
+            this.velocity.multiplyScalar(cfg.DRAG);
+        } else if (this.boostActiveTime > 0) {
+            // Light drag during lunge only — hold phase already damps above
             this.velocity.multiplyScalar(cfg.DRAG);
         }
 
@@ -457,6 +474,8 @@ ASTEROIDS.Player = class Player {
         var cfg = ASTEROIDS.CONFIG.PLAYER;
         this.boosting = true;
         this.boostActiveTime = cfg.BOOST_DURATION;
+        // Hold starts after the lunge completes (set in update).
+        this.boostHoldTime = 0;
         this.boostCooldown = cfg.BOOST_COOLDOWN;
 
         var dir = this.getFacingDir();
@@ -648,7 +667,8 @@ ASTEROIDS.Player = class Player {
     }
 
     isBoosting() {
-        return this.boosting || this.boostActiveTime > 0;
+        // True through lunge + apex hold so FX/HUD cover the full forward beat.
+        return this.boosting || this.boostActiveTime > 0 || this.boostHoldTime > 0;
     }
 
     getBoostCooldownPercent() {

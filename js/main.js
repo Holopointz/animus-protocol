@@ -1118,7 +1118,7 @@ ASTEROIDS.Game = class Game {
         // Keyboard free-look (Q/E yaw, R/F pitch)
         var lookSpeed = (visConfig.CAMERA_LOOK_SPEED || 1.6) * dt;
         var yawMax = visConfig.CAMERA_LOOK_YAW_MAX || 1.15;
-        var pitchMax = visConfig.CAMERA_LOOK_PITCH_MAX || 0.55;
+        var pitchMax = visConfig.CAMERA_LOOK_PITCH_MAX || 0.65;
         if (this._lookKeys['q']) this.lookYaw += lookSpeed;
         if (this._lookKeys['e']) this.lookYaw -= lookSpeed;
         if (this._lookKeys['r']) this.lookPitch += lookSpeed * 0.85;
