@@ -37,11 +37,29 @@ ASTEROIDS.Player = class Player {
         this.spriteTexture = this.createSpriteTexture();
         this.engineGlowSprite = this.createEngineGlowSprite();
 
-        // Motion trail
+        // Engine/damage/death particles (pooled sprites - created once, zero per-frame allocation)
+        this.particlePool = new ASTEROIDS.SpritePool(scene, 120, this.spriteTexture);
+
+        // Motion trail (pooled sprites - created once, zero per-frame allocation)
         this.trailPositions = [];
         this.trailGroup = new THREE.Group();
         this.scene.add(this.trailGroup);
         this._trailTimer = 0;
+        this._trailSprites = [];
+        for (var _ti = 0; _ti < 28; _ti++) {
+            var _ts = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: this.spriteTexture,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                transparent: true,
+                opacity: 0,
+                color: 0x00aaff
+            }));
+            _ts.scale.set(1.4, 1.4, 1);
+            _ts.visible = false;
+            this.trailGroup.add(_ts);
+            this._trailSprites.push(_ts);
+        }
 
         // Thruster glow
         this.thrusterLight = new THREE.PointLight(0x00aaff, 0, 8);
@@ -102,24 +120,20 @@ ASTEROIDS.Player = class Player {
 
     loadModel() {
         var self = this;
-        var loader = new THREE.GLTFLoader();
-        var textureLoader = new THREE.TextureLoader();
-        var texPath = 'assets/textures/';
+        var A = ASTEROIDS.Assets;
+        var diffuseMap = A.textures['playerDiffuse'];
+        var normalMap = A.textures['playerNormal'];
+        var specularMap = A.textures['playerSpecular'];
 
-        var diffuseMap = textureLoader.load(texPath + 'Diffuse_animus_hull.jpeg');
-        var normalMap = textureLoader.load(texPath + 'Normal_animus_hull.jpg');
-        var specularMap = textureLoader.load(texPath + 'Specular_animus_hull.jpg');
-
-        loader.load('assets/models/spaceship.glb', function(gltf) {
-            self.mesh = gltf.scene;
-
+        function applyModel(gltfScene) {
+            self.mesh = gltfScene;
             self.mesh.traverse(function(child) {
                 if (child.isMesh) {
                     child.material = child.material.clone();
-                    child.material.map = diffuseMap;
-                    child.material.normalMap = normalMap;
-                    child.material.roughnessMap = specularMap;
-                    child.material.metalnessMap = specularMap;
+                    child.material.map = diffuseMap || child.material.map;
+                    child.material.normalMap = normalMap || child.material.normalMap;
+                    child.material.roughnessMap = specularMap || child.material.roughnessMap;
+                    child.material.metalnessMap = specularMap || child.material.metalnessMap;
                     child.material.roughness = 0.70;
                     child.material.metalness = 0.35;
                     child.material.emissive = new THREE.Color(0x1a3344);
@@ -133,13 +147,37 @@ ASTEROIDS.Player = class Player {
                     child.receiveShadow = true;
                 }
             });
-
             self.mesh.scale.set(0.85, 0.85, 0.85);
             // Model nose points +Z in many GLBs; rotate so nose faces +Y (our forward)
             // Top-down XY: nose along +Y (matches projectiles/boost facing)
             self.mesh.rotation.set(-Math.PI / 1, 1.5, -Math.PI / 2);
             self.group.add(self.mesh);
             self.ready = true;
+        }
+
+        // Preferred: use the boot-time cached GLB (clone scene so independent
+        // transforms/materials; textures remain the shared cached refs).
+        if (A.modelsReady['ship'] && A.models['ship']) {
+            applyModel(A.models['ship'].clone());
+            return;
+        }
+
+        // Preloader still in flight: load now and register into the cache so
+        // future players reuse it (no double GLB network fetch).
+        var loader = new THREE.GLTFLoader();
+        var textureLoader = new THREE.TextureLoader();
+        var texPath = 'assets/textures/';
+        var dTex = textureLoader.load(texPath + 'Diffuse_animus_hull.jpeg');
+        var nTex = textureLoader.load(texPath + 'Normal_animus_hull.jpg');
+        var sTex = textureLoader.load(texPath + 'Specular_animus_hull.jpg');
+        if (!A.textures['playerDiffuse']) { A.textures['playerDiffuse'] = dTex; }
+        if (!A.textures['playerNormal']) { A.textures['playerNormal'] = nTex; }
+        if (!A.textures['playerSpecular']) { A.textures['playerSpecular'] = sTex; }
+        loader.load('assets/models/spaceship.glb', function(gltf) {
+            A.models['ship'] = gltf.scene;
+            A.modelsReady['ship'] = true;
+            var pre = self.mesh;
+            applyModel(gltf.scene);
         }, undefined, function(error) {
             console.error('Error loading spaceship model:', error);
             // Fallback placeholder so game stays playable
@@ -343,34 +381,25 @@ ASTEROIDS.Player = class Player {
             }
         }
 
-        // Motion trail
+        // Motion trail (pooled sprites - no per-frame create/dispose)
         this._trailTimer += dt;
         if (this._trailTimer > 0.03) {
             this._trailTimer = 0;
             this.trailPositions.push(this.group.position.clone());
             if (this.trailPositions.length > 28) this.trailPositions.shift();
         }
-        while (this.trailGroup.children.length > 0) {
-            var child = this.trailGroup.children[0];
-            this.trailGroup.remove(child);
-            if (child.material) {
-                child.material.dispose();
-            }
+        var nTrail = this.trailPositions.length;
+        var colorHex = this.boostActiveTime > 0 ? 0xff6622 : 0x00aaff;
+        for (var ti = 0; ti < nTrail; ti++) {
+            var ts = this._trailSprites[ti];
+            ts.visible = true;
+            ts.position.copy(this.trailPositions[ti]);
+            ts.position.z = -0.5;
+            ts.material.opacity = (ti / Math.max(nTrail, 1)) * 0.65;
+            ts.material.color.setHex(colorHex);
         }
-        for (var ti = 0; ti < this.trailPositions.length; ti++) {
-            var alpha = (ti / this.trailPositions.length) * 0.65;
-            var trailSprite = new THREE.Sprite(new THREE.SpriteMaterial({
-                map: this.spriteTexture,
-                blending: THREE.AdditiveBlending,
-                depthWrite: false,
-                transparent: true,
-                opacity: alpha,
-                color: this.boostActiveTime > 0 ? 0xff6622 : 0x00aaff
-            }));
-            trailSprite.position.copy(this.trailPositions[ti]);
-            trailSprite.position.z = -0.5;
-            trailSprite.scale.set(1.4, 1.4, 1);
-            this.trailGroup.add(trailSprite);
+        for (var ti2 = nTrail; ti2 < this._trailSprites.length; ti2++) {
+            this._trailSprites[ti2].visible = false;
         }
 
         // Damage FX
@@ -436,7 +465,8 @@ ASTEROIDS.Player = class Player {
             position: pos,
             velocity: bulletVel,
             lifetime: ASTEROIDS.CONFIG.PLAYER.BULLET_LIFETIME,
-            mesh: this.createBulletMesh(pos, dir)
+            direction: dir.clone().normalize(),
+            mesh: null
         };
         bullets.push(bullet);
 
@@ -492,49 +522,40 @@ ASTEROIDS.Player = class Player {
             }
         }
 
-        for (var j = this.engineParticles.length - 1; j >= 0; j--) {
-            var p = this.engineParticles[j];
-            p.life -= dt;
-            if (p.life <= 0) {
-                this.scene.remove(p.mesh);
-                if (p.mesh.material) p.mesh.material.dispose();
-                this.engineParticles.splice(j, 1);
-                continue;
-            }
-            p.mesh.position.add(p.velocity.clone().multiplyScalar(dt));
-            p.mesh.material.opacity = Math.max(0, p.life / p.maxLife);
-            var sc = 0.25 + (p.life / p.maxLife) * 0.9;
-            p.mesh.scale.setScalar(sc);
-        }
+        if (!this.particlePool) return;
+        this.particlePool.update(dt, function(s, ddt) {
+            s.position.x += (s.userData.vx || 0) * ddt;
+            s.position.y += (s.userData.vy || 0) * ddt;
+            s.position.z += (s.userData.vz || 0) * ddt;
+            var t = Math.max(0, s.userData.life / (s.userData.maxLife || 0.55));
+            s.material.opacity = t;
+            var sc = 0.25 + t * 0.9;
+            s.scale.set(sc, sc, 1);
+        });
     }
 
     createParticle(color, speed) {
-        var spriteMat = new THREE.SpriteMaterial({
-            map: this.spriteTexture,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
-            transparent: true,
-            opacity: 1,
-            color: color
-        });
-        var sprite = new THREE.Sprite(spriteMat);
-
+        if (!this.particlePool) return;
         var back = new THREE.Vector3(0, -1, 0).applyAxisAngle(new THREE.Vector3(0, 0, 1), this.rotation);
         var perpX = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 0, 1), this.rotation);
-
         var spawnPos = this.group.position.clone()
             .addScaledVector(back, 1.5)
             .addScaledVector(perpX, (Math.random() - 0.5) * 0.55);
-        sprite.position.copy(spawnPos);
-        sprite.scale.set(0.35, 0.35, 1);
-
         var vel = back.clone().multiplyScalar(speed * (Math.random() * 0.5 + 0.5))
             .add(perpX.clone().multiplyScalar((Math.random() - 0.5) * speed * 0.5));
-
-        this.scene.add(sprite);
-        this.engineParticles.push({
-            mesh: sprite, velocity: vel, life: 0.55, maxLife: 0.55
+        var sp = this.particlePool.emit({
+            x: spawnPos.x, y: spawnPos.y, z: spawnPos.z,
+            scale: 0.35,
+            opacity: 1,
+            life: 0.55,
+            maxLife: 0.55,
+            color: color
         });
+        if (sp) {
+            sp.userData.vx = vel.x;
+            sp.userData.vy = vel.y;
+            sp.userData.vz = vel.z;
+        }
     }
 
     takeDamage(amount) {
@@ -612,69 +633,75 @@ ASTEROIDS.Player = class Player {
     }
 
     createParticleDead(color) {
-        var spriteMat = new THREE.SpriteMaterial({
-            map: this.spriteTexture,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
-            transparent: true,
-            opacity: 1,
-            color: color
-        });
-        var sprite = new THREE.Sprite(spriteMat);
-        sprite.position.copy(this.group.position);
-        sprite.scale.set(0.55, 0.55, 1);
+        if (!this.particlePool) return;
         var vel = new THREE.Vector3(
             (Math.random() - 0.5) * 8,
             (Math.random() - 0.5) * 8,
             (Math.random() - 0.5) * 4
         );
-        this.scene.add(sprite);
-        this.engineParticles.push({ mesh: sprite, velocity: vel, life: 1.0, maxLife: 1.0 });
+        var sp = this.particlePool.emit({
+            x: this.group.position.x, y: this.group.position.y, z: this.group.position.z,
+            scale: 0.55,
+            opacity: 1,
+            life: 1.0,
+            maxLife: 1.0,
+            color: color
+        });
+        if (sp) {
+            sp.userData.vx = vel.x;
+            sp.userData.vy = vel.y;
+            sp.userData.vz = vel.z;
+        }
     }
 
     createDamageSpark() {
-        var sparkMat = new THREE.SpriteMaterial({
-            map: this.spriteTexture,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
-            transparent: true,
-            opacity: 0.85,
-            color: 0xff6600
-        });
-        var spark = new THREE.Sprite(sparkMat);
-        spark.position.copy(this.group.position);
-        spark.position.x += (Math.random() - 0.5) * 2;
-        spark.position.y += (Math.random() - 0.5) * 2;
-        spark.scale.set(0.3, 0.3, 1);
+        if (!this.particlePool) return;
         var vel = new THREE.Vector3(
             (Math.random() - 0.5) * 3,
             (Math.random() - 0.5) * 3,
             (Math.random() - 0.5) * 1
         );
-        this.scene.add(spark);
-        this.engineParticles.push({ mesh: spark, velocity: vel, life: 0.35 + Math.random() * 0.35, maxLife: 0.5 });
+        var life = 0.35 + Math.random() * 0.35;
+        var sp = this.particlePool.emit({
+            x: this.group.position.x + (Math.random() - 0.5) * 2,
+            y: this.group.position.y + (Math.random() - 0.5) * 2,
+            z: this.group.position.z,
+            scale: 0.3,
+            opacity: 0.85,
+            life: life,
+            maxLife: 0.5,
+            color: 0xff6600
+        });
+        if (sp) {
+            sp.userData.vx = vel.x;
+            sp.userData.vy = vel.y;
+            sp.userData.vz = vel.z;
+        }
     }
 
     createDamageSmoke() {
-        var smokeMat = new THREE.SpriteMaterial({
-            map: this.spriteTexture,
-            blending: THREE.NormalBlending,
-            depthWrite: false,
-            transparent: true,
-            opacity: 0.35,
-            color: 0x554433
-        });
-        var smoke = new THREE.Sprite(smokeMat);
-        smoke.position.copy(this.group.position);
-        smoke.position.x += (Math.random() - 0.5) * 1.5;
-        smoke.position.y += (Math.random() - 0.5) * 1.5;
-        smoke.scale.set(1.6, 1.6, 1);
+        if (!this.particlePool) return;
         var vel = new THREE.Vector3(
             (Math.random() - 0.5) * 0.8,
             (Math.random() - 0.5) * 0.8,
             (Math.random() - 0.5) * 0.3
         );
-        this.scene.add(smoke);
-        this.engineParticles.push({ mesh: smoke, velocity: vel, life: 1.0 + Math.random(), maxLife: 1.5 });
+        var life = 1.0 + Math.random();
+        var sp = this.particlePool.emit({
+            x: this.group.position.x + (Math.random() - 0.5) * 1.5,
+            y: this.group.position.y + (Math.random() - 0.5) * 1.5,
+            z: this.group.position.z,
+            scale: 1.6,
+            opacity: 0.35,
+            life: life,
+            maxLife: 1.5,
+            color: 0x554433,
+            blending: THREE.NormalBlending
+        });
+        if (sp) {
+            sp.userData.vx = vel.x;
+            sp.userData.vy = vel.y;
+            sp.userData.vz = vel.z;
+        }
     }
 };

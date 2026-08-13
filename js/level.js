@@ -358,7 +358,9 @@ ASTEROIDS.Level = class Level {
         
         // Create planet sphere as a distant backdrop (FrontSide, outside the playfield)
         const geometry = new THREE.SphereGeometry(ASTEROIDS.CONFIG.WORLD.PLANET_RADIUS, 64, 64);
-        const texture = new THREE.TextureLoader().load('assets/textures/' + config.texture);
+        // Reuse boot-time preloader texture where possible (single fetch per asset).
+        const cachedTex = (ASTEROIDS.Assets && ASTEROIDS.Assets.textures) ? ASTEROIDS.Assets.textures['planet_' + config.texture] : null;
+        const texture = cachedTex || new THREE.TextureLoader().load('assets/textures/' + config.texture);
         const planetBrightness = config.brightness != null ? config.brightness : 1;
         const material = new THREE.MeshBasicMaterial({
             map: texture,
@@ -428,37 +430,48 @@ ASTEROIDS.Level = class Level {
         const sign = (this._cloudSign = (this._cloudSign || 0) + 1);
         const geo = new THREE.SphereGeometry(ASTEROIDS.CONFIG.WORLD.PLANET_RADIUS + 5, 64, 64);
         const self = this;
+        // Boot-time preloader already fetched every planet texture once under the
+        // 'planet_' prefix; reuse it instead of issuing a second network load per level.
+        const cachedCloud = (ASTEROIDS.Assets && ASTEROIDS.Assets.textures) ? ASTEROIDS.Assets.textures['planet_' + config.cloudTexture] : null;
+        if (cachedCloud && cachedCloud.image) {
+            self._buildCloudMesh(cachedCloud.image, sign, geo, config);
+            return;
+        }
         new THREE.TextureLoader().load('assets/textures/' + config.cloudTexture, function (tex) {
             if (sign !== self._cloudSign) return; // level changed while loading
-            const img = tex.image;
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-            for (let i = 0; i < data.length; i += 4) {
-                // jpg has black where there are no clouds: use luminance as alpha
-                const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
-                data[i + 3] = lum;
-            }
-            ctx.putImageData(imageData, 0, 0);
-            const cloudTex = new THREE.CanvasTexture(canvas);
-            cloudTex.needsUpdate = true;
-            const cloudEmission = config.cloudEmission != null ? config.cloudEmission : 1;
-            const mat = new THREE.MeshBasicMaterial({
-                map: cloudTex,
-                color: new THREE.Color(cloudEmission, cloudEmission, cloudEmission),
-                transparent: true,
-                depthWrite: false,
-                side: THREE.FrontSide
-            });
-            self.planetClouds = new THREE.Mesh(geo, mat);
-            self.planetClouds.name = 'planetClouds';
-            self.planetClouds.position.set(0, 0, ASTEROIDS.CONFIG.WORLD.PLANET_DISTANCE);
-            self.scene.add(self.planetClouds);
+            self._buildCloudMesh(tex.image, sign, geo, config);
         });
+    }
+
+    _buildCloudMesh(img, sign, geo, config) {
+        if (sign !== this._cloudSign) return;
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        for (let i = 0; i < data.length; i += 4) {
+            // jpg has black where there are no clouds: use luminance as alpha
+            const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+            data[i + 3] = lum;
+        }
+        ctx.putImageData(imageData, 0, 0);
+        const cloudTex = new THREE.CanvasTexture(canvas);
+        cloudTex.needsUpdate = true;
+        const cloudEmission = config.cloudEmission != null ? config.cloudEmission : 1;
+        const mat = new THREE.MeshBasicMaterial({
+            map: cloudTex,
+            color: new THREE.Color(cloudEmission, cloudEmission, cloudEmission),
+            transparent: true,
+            depthWrite: false,
+            side: THREE.FrontSide
+        });
+        this.planetClouds = new THREE.Mesh(geo, mat);
+        this.planetClouds.name = 'planetClouds';
+        this.planetClouds.position.set(0, 0, ASTEROIDS.CONFIG.WORLD.PLANET_DISTANCE);
+        this.scene.add(this.planetClouds);
     }
 
     createSaturnRing() {
@@ -483,7 +496,8 @@ ASTEROIDS.Level = class Level {
         }
         ringGeo.setAttribute('uv', new THREE.Float32BufferAttribute(ringUvs, 2));
 
-        const ringTex = new THREE.TextureLoader().load('assets/textures/2k_saturn_ring_alpha.png');
+        const cachedRing = (ASTEROIDS.Assets && ASTEROIDS.Assets.textures) ? ASTEROIDS.Assets.textures['planet_2k_saturn_ring_alpha.png'] : null;
+        const ringTex = cachedRing || new THREE.TextureLoader().load('assets/textures/2k_saturn_ring_alpha.png');
         ringTex.wrapS = THREE.ClampToEdgeWrapping;
         ringTex.wrapT = THREE.ClampToEdgeWrapping;
         const ringMat = new THREE.MeshBasicMaterial({

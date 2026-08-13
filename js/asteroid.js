@@ -73,16 +73,25 @@ ASTEROIDS.Asteroid = class Asteroid {
         }
         geometry.computeVertexNormals();
         
-        // Use high-detail vessel/asteroid surface maps from the textures folder
-        var diffuseTex = new THREE.TextureLoader().load('assets/textures/Asteroid_surface_diffuse_map.jpg');
-        diffuseTex.wrapS = THREE.RepeatWrapping;
-        diffuseTex.wrapT = THREE.RepeatWrapping;
-        diffuseTex.repeat.set(2, 2);
-        
-        var normalTex = new THREE.TextureLoader().load('assets/textures/Asteroid_surface_normal_map.jpg');
-        normalTex.wrapS = THREE.RepeatWrapping;
-        normalTex.wrapT = THREE.RepeatWrapping;
-        normalTex.repeat.set(2, 2);
+        // Use cached asteroid surface maps from the boot-time preloader - no
+        // per-spawn TextureLoader() calls that cause network hitches mid-game.
+        // Note: r128 Texture has no userData, so repeat-wrap readiness is tracked
+        // in a plain ASTEROIDS map keyed by texture uuid (ES5-safe).
+        var repeatReady = ASTEROIDS._asteroidTexReady = ASTEROIDS._asteroidTexReady || {};
+        var diffuseTex = ASTEROIDS.Assets.textures['asteroidDiffuse'] || null;
+        var normalTex = ASTEROIDS.Assets.textures['asteroidNormal'] || null;
+        if (diffuseTex && !repeatReady[diffuseTex.uuid]) {
+            diffuseTex.wrapS = THREE.RepeatWrapping;
+            diffuseTex.wrapT = THREE.RepeatWrapping;
+            diffuseTex.repeat.set(2, 2);
+            repeatReady[diffuseTex.uuid] = true;
+        }
+        if (normalTex && !repeatReady[normalTex.uuid]) {
+            normalTex.wrapS = THREE.RepeatWrapping;
+            normalTex.wrapT = THREE.RepeatWrapping;
+            normalTex.repeat.set(2, 2);
+            repeatReady[normalTex.uuid] = true;
+        }
         
         // Random roughness and metalness
         var roughness = 0.75 + Math.random() * 0.2;
@@ -96,6 +105,7 @@ ASTEROIDS.Asteroid = class Asteroid {
             metalness: metalness,
             flatShading: true
         });
+        if (window.ASTEROIDS.envMap) { mat.envMap = window.ASTEROIDS.envMap; mat.envMapIntensity = 0.4; }
         
         var mesh = new THREE.Mesh(geometry, mat);
         mesh.castShadow = true;

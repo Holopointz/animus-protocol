@@ -80,7 +80,7 @@ ASTEROIDS.Game = class Game {
         this.explosionSprites = [];
         this._explosionSheetTexture = null;
         // Preload immediately - start() is never called on this page, so load the sheet here
-        this._explosionSheetTexture = new THREE.TextureLoader().load('assets/textures/explosion.png');
+        this._explosionSheetTexture = (ASTEROIDS.Assets && ASTEROIDS.Assets.textures && ASTEROIDS.Assets.textures['explosionSheet']) || new THREE.TextureLoader().load('assets/textures/explosion.png');
         
         // Smoke/dust particles (soft cloud sprites)
         this.smokeParticles = [];
@@ -128,8 +128,10 @@ ASTEROIDS.Game = class Game {
         
         this.setupPostProcessing();
         
-        // Create environment cubemap for reflections
+        // Create environment cubemap for reflections, then push it onto the shared
+        // master materials (Plasma/Glass/Shell) + shell textures once available.
         window.ASTEROIDS.envMap = createProceduralCubemap();
+        if (ASTEROIDS.Materials && ASTEROIDS.Materials.refreshEnvMap) ASTEROIDS.Materials.refreshEnvMap();
         
         // Create shared textures for smoke & sparks
         this.createSharedTextures();
@@ -140,6 +142,11 @@ ASTEROIDS.Game = class Game {
         
         this.asteroidManager = new ASTEROIDS.AsteroidManager(this.scene);
         this.lootManager = new ASTEROIDS.LootManager(this.scene);
+        // Instanced pools: bullets + explosions share fixed objects, zero per-frame allocs.
+        this.bulletPool = new ASTEROIDS.BulletPool(this.scene);
+        this.explosionSpritePool = new ASTEROIDS.ExplosionSpritePool(this.scene, 24);
+        if (this._explosionSheetTexture) this.explosionSpritePool.attachSheet(this._explosionSheetTexture);
+        this.smokePool = new ASTEROIDS.SpritePool(this.scene, 40, this._sharedSmokeTexture);
         
         // Create player (model loads async)
         this.player = new ASTEROIDS.Player(this.scene);
@@ -629,19 +636,13 @@ ASTEROIDS.Game = class Game {
             var bullet = this.bullets[i];
             bullet.lifetime -= dt;
             if (bullet.lifetime <= 0) {
-                this._disposeObject(bullet.mesh);
-                this.scene.remove(bullet.mesh);
                 this.bullets.splice(i, 1);
                 continue;
             }
-            bullet.position.add(bullet.velocity.clone().multiplyScalar(dt));
-            bullet.mesh.position.copy(bullet.position);
-            // Rotate bullet group to match direction
-            bullet.mesh.quaternion.setFromUnitVectors(
-                new THREE.Vector3(0, 1, 0),
-                bullet.velocity.clone().normalize()
-            );
-            
+            bullet.position.x += bullet.velocity.x * dt;
+            bullet.position.y += bullet.velocity.y * dt;
+            bullet.position.z += bullet.velocity.z * dt;
+
             // Wrap bullets
             var size = ASTEROIDS.CONFIG.WORLD.SIZE;
             if (bullet.position.x > size) bullet.position.x = -size;
@@ -649,6 +650,8 @@ ASTEROIDS.Game = class Game {
             if (bullet.position.y > size) bullet.position.y = -size;
             if (bullet.position.y < -size) bullet.position.y = size;
         }
+        // One InstancedMesh draw call per pool for every active bullet - no per-shot groups.
+        if (this.bulletPool) this.bulletPool.sync(this.bullets);
     }
     
     // Recursive dispose helper for groups/meshes
@@ -716,8 +719,6 @@ ASTEROIDS.Game = class Game {
             }
             
             if (bulletHit) {
-                this._disposeObject(bullet.mesh);
-                this.scene.remove(bullet.mesh);
                 this.bullets.splice(bi, 1);
             }
         }
@@ -852,12 +853,12 @@ ASTEROIDS.Game = class Game {
     
     _cleanupEntities() {
         var self = this;
-        // Clean up bullets
+        // Clean up bullets (data-only now; mesh is null, guard against remove(null))
         this.bullets.forEach(function(b) {
-            self._disposeObject(b.mesh);
-            self.scene.remove(b.mesh);
+            if (b.mesh) { self._disposeObject(b.mesh); self.scene.remove(b.mesh); }
         });
         this.bullets = [];
+        if (this.bulletPool) this.bulletPool.clear();
         
         this.asteroidManager.clear(this.scene);
         this.lootManager.clear(this.scene);
@@ -875,13 +876,18 @@ ASTEROIDS.Game = class Game {
         });
         this.explosionLights = [];
         
-        // Clean up spritesheet explosion sprites
+        // Clean up spritesheet explosion sprites (legacy array may hold old sprites)
         this.explosionSprites.forEach(function(es) {
             self.scene.remove(es.mesh);
             if (es.mesh.material.map) es.mesh.material.map.dispose();
             es.mesh.material.dispose();
         });
         this.explosionSprites = [];
+        // Pooled sprites and smoke share one fixed object set - never remount/dispose,
+        // just park them back until the next use (zero allocation after boot).
+        if (this.explosionSpritePool) this.explosionSpritePool.clear();
+        if (this.smokePool) this.smokePool.clear();
+        if (this.player && this.player.particlePool) this.player.particlePool.clear();
         
         // Clean up debris particles
         this.debrisParticles.forEach(function(p) {
@@ -938,36 +944,27 @@ ASTEROIDS.Game = class Game {
             maxLife: 0.8
         });
         
-        // Smoke particles (soft expanding cloud)
-        if (this._sharedSmokeTexture) {
+        // Smoke particles (soft expanding cloud) - pooled sprites, zero per-explosion allocs.
+        if (this.smokePool && this._sharedSmokeTexture) {
             var smokeCount = 12 + Math.floor(Math.random() * 8);
             for (var si = 0; si < smokeCount; si++) {
-                var smokeMat = new THREE.SpriteMaterial({
-                    map: this._sharedSmokeTexture,
-                    blending: THREE.NormalBlending,
-                    depthWrite: false,
-                    transparent: true,
+                var sp = this.smokePool.emit({
+                    x: position.x + (Math.random() - 0.5) * radius,
+                    y: position.y + (Math.random() - 0.5) * radius,
+                    z: (position.z || 0) + (Math.random() - 0.5) * 2,
+                    scale: 2 + Math.random() * 4,
                     opacity: 0.5 + Math.random() * 0.3,
-                    color: new THREE.Color(0.15, 0.1, 0.05)
-                });
-                var smoke = new THREE.Sprite(smokeMat);
-                smoke.position.copy(position);
-                smoke.position.x += (Math.random() - 0.5) * radius;
-                smoke.position.y += (Math.random() - 0.5) * radius;
-                smoke.position.z += (Math.random() - 0.5) * 2;
-                var smokeSize = 2 + Math.random() * 4;
-                smoke.scale.set(smokeSize, smokeSize, 1);
-                this.scene.add(smoke);
-                this.smokeParticles.push({
-                    mesh: smoke,
                     life: 1.5 + Math.random() * 1.5,
                     maxLife: 2.0,
-                    drift: new THREE.Vector3(
-                        (Math.random() - 0.5) * 1.5,
-                        (Math.random() - 0.5) * 1.5,
-                        (Math.random() - 0.5) * 0.3
-                    )
+                    color: 0x261a0d,
+                    blending: THREE.NormalBlending,
+                    map: this._sharedSmokeTexture
                 });
+                if (sp) {
+                    sp.userData.vx = (Math.random() - 0.5) * 1.5;
+                    sp.userData.vy = (Math.random() - 0.5) * 1.5;
+                    sp.userData.vz = (Math.random() - 0.5) * 0.3;
+                }
             }
         }
         
@@ -978,70 +975,16 @@ ASTEROIDS.Game = class Game {
     }
     
     _spawnExplosionSprite(position, radius) {
+        if (!this.explosionSpritePool) return;
         if (!this._explosionSheetTexture || !this._explosionSheetTexture.image) return;
-        
-        var cols = 5;
-        var rows = 5;
-        var totalFrames = cols * rows;
-        // Build a texture per explosion from the shared image so simultaneous blasts keep independent offsets
-        var tex = new THREE.Texture(this._explosionSheetTexture.image);
-        tex.needsUpdate = true;
-        tex.wrapS = THREE.ClampToEdgeWrapping;
-        tex.wrapT = THREE.ClampToEdgeWrapping;
-        tex.magFilter = THREE.LinearFilter;
-        tex.minFilter = THREE.LinearFilter;
-        tex.generateMipmaps = false;
-        tex.repeat.set(1 / cols, 1 / rows);
-        tex.offset.set(0, 0);
-        
-        var mat = new THREE.SpriteMaterial({
-            map: tex,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
-            transparent: true
-        });
-        var sprite = new THREE.Sprite(mat);
-        sprite.position.copy(position);
-        sprite.position.z += 2; // keep above the playfield
-        
-        var vfx = ASTEROIDS.CONFIG.VFX;
-        var baseScale = vfx.EXPLOSION_SPRITE_SCALE != null ? vfx.EXPLOSION_SPRITE_SCALE : 4.5;
-        var size = (baseScale * 0.6) + radius * 0.8;
-        sprite.scale.set(size, size, 1);
-        
-        this.scene.add(sprite);
-        this.explosionSprites.push({
-            mesh: sprite,
-            cols: cols,
-            rows: rows,
-            totalFrames: totalFrames,
-            frame: 0,
-            timer: 0,
-            fps: vfx.EXPLOSION_SPRITE_FPS != null ? vfx.EXPLOSION_SPRITE_FPS : 45
-        });
+        this.explosionSpritePool.sheet = this._explosionSheetTexture;
+        this.explosionSpritePool.emit(position, radius);
     }
-    
+
     updateExplosionSprites(dt) {
-        for (var i = this.explosionSprites.length - 1; i >= 0; i--) {
-            var e = this.explosionSprites[i];
-            e.timer += dt;
-            var frameDuration = 1 / e.fps;
-            while (e.timer >= frameDuration) {
-                e.timer -= frameDuration;
-                e.frame++;
-                if (e.frame >= e.totalFrames) {
-                    // Destroy sprite after final frame
-                    this.scene.remove(e.mesh);
-                    if (e.mesh.material.map) e.mesh.material.map.dispose();
-                    e.mesh.material.dispose();
-                    this.explosionSprites.splice(i, 1);
-                    break;
-                }
-                var col = e.frame % e.cols;                    // top-left -> bottom-right
-                var row = Math.floor(e.frame / e.cols);
-                e.mesh.material.map.offset.set(col / e.cols, 1 - (row + 1) / e.rows);
-            }
-        }
+        var vfx = ASTEROIDS.CONFIG.VFX;
+        var fps = vfx.EXPLOSION_SPRITE_FPS != null ? vfx.EXPLOSION_SPRITE_FPS : 45;
+        if (this.explosionSpritePool) this.explosionSpritePool.update(dt, fps);
     }
     
     createImpactSparks(position, normal) {
@@ -1140,22 +1083,17 @@ ASTEROIDS.Game = class Game {
     }
     
     updateSmokeParticles(dt) {
-        for (var i = this.smokeParticles.length - 1; i >= 0; i--) {
-            var s = this.smokeParticles[i];
-            s.life -= dt;
-            if (s.life <= 0) {
-                this.scene.remove(s.mesh);
-                s.mesh.material.dispose();
-                this.smokeParticles.splice(i, 1);
-                continue;
-            }
-            s.mesh.position.x += s.drift.x * dt;
-            s.mesh.position.y += s.drift.y * dt;
-            s.mesh.position.z += s.drift.z * dt;
-            var fade = s.life / s.maxLife;
-            s.mesh.material.opacity = fade * 0.6;
-            s.mesh.scale.multiplyScalar(1 + dt * 0.8);
-        }
+        if (!this.smokePool) return;
+        this.smokePool.update(dt, function(s, ddt) {
+            s.position.x += (s.userData.vx || 0) * ddt;
+            s.position.y += (s.userData.vy || 0) * ddt;
+            s.position.z += (s.userData.vz || 0) * ddt;
+            var fade = Math.max(0, s.userData.life / (s.userData.maxLife || 2.0));
+            s.material.opacity = fade * 0.6;
+            var grow = 1 + ddt * 0.8;
+            s.scale.x *= grow;
+            s.scale.y *= grow;
+        });
     }
     
     updateCamera(dt) {
