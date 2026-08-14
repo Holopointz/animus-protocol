@@ -84,6 +84,7 @@ ASTEROIDS.Assets = {
                 try {
                     ASTEROIDS.Materials._applySharedTextures();
                     self._buildCanisterParts();
+                    self._buildGearParts();
                 } catch (err) {
                     console.error('Asset material build failed:', err);
                 }
@@ -132,6 +133,10 @@ ASTEROIDS.Assets = {
         loadTex('canisterDiffuse', 'assets/textures/difuse_canister.png', { flipY: false, srgb: true });
         loadTex('canisterNormal', 'assets/textures/normal_canister.jpg', { flipY: false });
         loadTex('canisterRough', 'assets/textures/roughness_canister.png', { flipY: false });
+        loadTex('gearDiffuse', 'assets/textures/difuse_gear.png', { flipY: false, srgb: true });
+        loadTex('gearNormal', 'assets/textures/normal_gear.jpg', { flipY: false });
+        loadTex('gearRough', 'assets/textures/roughness_gear.png', { flipY: false });
+        loadTex('gearMetallic', 'assets/textures/metallic_gear.png', { flipY: false });
         loadTex('explosionSheet', 'assets/textures/explosion.png');
         loadTex('asteroidDiffuse', 'assets/textures/Asteroid_surface_diffuse_map.jpg', { repeat: 2 });
         loadTex('asteroidNormal', 'assets/textures/Asteroid_surface_normal_map.jpg', { repeat: 2 });
@@ -144,6 +149,7 @@ ASTEROIDS.Assets = {
 
         // GLB models, loaded exactly once at boot.
         loadModel('canister', 'assets/models/shield_canister.glb');
+        loadModel('gear', 'assets/models/gear_scrap.glb?v=76');
         loadModel('ship', 'assets/models/spaceship.glb');
     },
 
@@ -208,6 +214,39 @@ ASTEROIDS.Assets = {
         }
         this.canisterLoaded = any;
         if (!any) console.error('Canister GLB produced no bakeable mesh geometry');
+    },
+
+    // Baked scrap-gear geometry from gear_scrap.glb. Same InstancedMesh rule as
+    // the canister: bake node TRS + gameplay scale into verts so mesh.scale stays 1.
+    gearGeometry: null,
+    gearLoaded: false,
+    _buildGearParts: function() {
+        if (this.gearLoaded || !this.modelsReady['gear']) return;
+        var root = this.models['gear'];
+        if (root.updateMatrixWorld) root.updateMatrixWorld(true);
+
+        var gscale = 1.75;
+        try {
+            if (ASTEROIDS.CONFIG && ASTEROIDS.CONFIG.LOOT && ASTEROIDS.CONFIG.LOOT.SCRAP_GEAR_SCALE) {
+                gscale = ASTEROIDS.CONFIG.LOOT.SCRAP_GEAR_SCALE;
+            }
+        } catch (e) {}
+
+        var geos = [];
+        root.traverse(function(child) {
+            if (!child.isMesh || !child.geometry) return;
+            var g = child.geometry.clone();
+            g.applyMatrix4(child.matrixWorld);
+            // Blender Y-up gear is flat on XY; lay it so the face reads well in top-down play.
+            // (No extra rotate if export already sits face-on after Y-up glTF.)
+            if (gscale !== 1) g.scale(gscale, gscale, gscale);
+            g.computeBoundingSphere();
+            g.computeBoundingBox();
+            geos.push(g);
+        });
+        this.gearGeometry = ASTEROIDS.mergeGeometries(geos);
+        this.gearLoaded = !!this.gearGeometry;
+        if (!this.gearLoaded) console.error('Gear GLB produced no bakeable mesh geometry');
     }
 };
 
@@ -277,12 +316,18 @@ ASTEROIDS.Materials = {
             roughness: 0.3,
             metalness: 0.1
         });
+        // Scrap gear body — PBR maps applied in _applySharedTextures once loaded.
         this.scrap = new THREE.MeshStandardMaterial({
-            color: 0xcc9944,
-            emissive: 0x442211,
-            emissiveIntensity: 0.4,
-            roughness: 0.7,
-            metalness: 0.5
+            color: 0xffffff,
+            map: null,
+            normalMap: null,
+            roughnessMap: null,
+            normalScale: new THREE.Vector2(1, 1),
+            emissive: 0x221100,
+            emissiveIntensity: 0.15,
+            roughness: 1.0,
+            metalness: 0.65,
+            toneMapped: false
         });
 
         this.bulletCyl = new THREE.MeshStandardMaterial({
@@ -308,7 +353,7 @@ ASTEROIDS.Materials = {
     },
 
     // Called once after Assets preload completes: binds the cached canister
-    // textures onto the SAME shared materials, never recreating them.
+    // and scrap-gear textures onto the SAME shared materials, never recreating them.
     _applySharedTextures: function() {
         if (!this.master || !this.master[2]) this._ensureBasic();
         var A = ASTEROIDS.Assets;
@@ -317,6 +362,16 @@ ASTEROIDS.Materials = {
         shell.normalMap = A.textures['canisterNormal'] || shell.normalMap;
         shell.roughnessMap = A.textures['canisterRough'] || shell.roughnessMap;
         shell.needsUpdate = true;
+
+        if (this.scrap) {
+            this.scrap.map = A.textures['gearDiffuse'] || this.scrap.map;
+            this.scrap.normalMap = A.textures['gearNormal'] || this.scrap.normalMap;
+            this.scrap.roughnessMap = A.textures['gearRough'] || this.scrap.roughnessMap;
+            this.scrap.metalnessMap = A.textures['gearMetallic'] || this.scrap.metalnessMap;
+            // With metalnessMap present, base metalness acts as a multiplier (1 = full map).
+            if (this.scrap.metalnessMap) this.scrap.metalness = 1.0;
+            this.scrap.needsUpdate = true;
+        }
         if (window.ASTEROIDS.envMap) this.refreshEnvMap();
     }
 };

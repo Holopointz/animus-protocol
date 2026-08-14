@@ -123,8 +123,9 @@ ASTEROIDS.LootItem.createSmallSprite = function() {
 };
 
 // InstancedMesh renderer for every loot type. The canister (battery) shares the
-// master Plasma/Glass/Shell materials on baked GLB geometry; food/scrap use a
-// handful of shared materials. Attraction streams reuse a SpritePool.
+// master Plasma/Glass/Shell materials on baked GLB geometry; scrap uses the baked
+// gear_scrap GLB + PBR maps; food keeps shared primitive materials. Attraction
+// streams reuse a SpritePool.
 ASTEROIDS.LootRenderer = class LootRenderer {
     constructor(scene) {
         this.scene = scene;
@@ -138,6 +139,7 @@ ASTEROIDS.LootRenderer = class LootRenderer {
         this.batteryBuilt = false;
         this.foodMeshes = {};
         this.scrapMeshes = {};
+        this.scrapBuilt = false;
         this._instanced = [];  // every InstancedMesh owned by this renderer (for resize)
 
         this._dummy = new THREE.Object3D();
@@ -210,10 +212,14 @@ ASTEROIDS.LootRenderer = class LootRenderer {
             ring: this._inst(torusGeo, foodRingMat),
             glow: this._inst(glowGeo, foodGlowMat)
         };
+        // Scrap starts as a simple icosa + glow placeholder until gear_scrap.glb bakes.
+        // Real gear geometry is swapped in by _ensureScrap() (scale baked, mesh.scale=1).
         this.scrapMeshes = {
             body: this._inst(scrapGeo, ASTEROIDS.Materials.scrap),
             glow: this._inst(scrapGlowGeo, scrapGlowMat)
         };
+        this._scrapPlaceholderBody = this.scrapMeshes.body;
+        this._scrapPlaceholderGlow = this.scrapMeshes.glow;
 
         // Placeholder battery (cylinder) used until the canister GLB parts are
         // baked. Reuses the shared plasma master material - no per-item alloc.
@@ -263,14 +269,60 @@ ASTEROIDS.LootRenderer = class LootRenderer {
         return true;
     }
 
+    // Swap the orange icosa scrap placeholder for baked gear_scrap.glb geometry.
+    // Scale is baked in assets.js — keep InstancedMesh.scale at 1,1,1.
+    _ensureScrap() {
+        if (this.scrapBuilt || !ASTEROIDS.Assets.gearLoaded) return false;
+        var geo = ASTEROIDS.Assets.gearGeometry;
+        var mat = ASTEROIDS.Materials.scrap;
+        if (!geo || !mat) return false;
+
+        var gearMesh = new THREE.InstancedMesh(geo, mat, this.capacity);
+        gearMesh.frustumCulled = false;
+        gearMesh.count = 0;
+        gearMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.group.add(gearMesh);
+
+        // Remove placeholder body from scene + tracking
+        if (this._scrapPlaceholderBody) {
+            this.group.remove(this._scrapPlaceholderBody);
+            for (var pi = this._instanced.length - 1; pi >= 0; pi--) {
+                if (this._instanced[pi] && this._instanced[pi].mesh === this._scrapPlaceholderBody) {
+                    this._instanced.splice(pi, 1);
+                    break;
+                }
+            }
+            this._scrapPlaceholderBody = null;
+        }
+
+        this.scrapMeshes.body = gearMesh;
+        // Keep a subtle warm glow behind the gear so pickups still read at a glance.
+        this.scrapBuilt = true;
+        return true;
+    }
+
     _apply(item, mesh) {
         if (!mesh || item._index >= this.capacity) return;
         var d = this._dummy;
         d.position.set(item.x, item.y, item.z || 0);
         d.rotation.set(item.rotX, item.rotY, item.rotZ);
-        // Pulse only. Base canister size is baked into geometry so world
-        // positions stay correct under InstancedMesh composition.
+        // Pulse only. Base size is baked into geometry so world positions
+        // stay correct under InstancedMesh composition.
         var s = 1 + Math.sin(item.pulseOffset) * 0.2;
+
+        // Despawn warning: blink (scale to 0 on alternate beats) while lifetime
+        // is in the final WARN_TIME window so the player can still scoop it.
+        var cfg = ASTEROIDS.CONFIG.LOOT || {};
+        var warn = (typeof cfg.WARN_TIME === 'number') ? cfg.WARN_TIME : 4.0;
+        var hz = (typeof cfg.WARN_BLINK_HZ === 'number') ? cfg.WARN_BLINK_HZ : 4.0;
+        if (item.lifetime <= warn && item.lifetime > 0) {
+            // Speed up slightly as expiry approaches
+            var urgency = 1 + (1 - (item.lifetime / warn)) * 1.5;
+            var phase = item.lifetime * hz * urgency * Math.PI * 2;
+            // Hard on/off blink via square wave on scale (works for InstancedMesh)
+            if (Math.sin(phase) < 0) s = 0;
+        }
+
         d.scale.set(s, s, s);
         d.updateMatrix();
         mesh.setMatrixAt(item._index, d.matrix);
@@ -328,7 +380,12 @@ ASTEROIDS.LootRenderer = class LootRenderer {
             this._syncGroup(batteries, [this.placeholder], cap);
         }
         this._syncGroup(foods, [this.foodMeshes.body, this.foodMeshes.ring, this.foodMeshes.glow], cap);
-        this._syncGroup(scraps, [this.scrapMeshes.body, this.scrapMeshes.glow], cap);
+
+        // Scrap: baked gear_scrap.glb when ready; otherwise icosa placeholder.
+        this._ensureScrap();
+        var scrapList = [this.scrapMeshes.body];
+        if (this.scrapMeshes.glow) scrapList.push(this.scrapMeshes.glow);
+        this._syncGroup(scraps, scrapList, cap);
     }
     update(dt, items, playerPos) {
         var pool = this.attractPool;

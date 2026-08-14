@@ -70,8 +70,14 @@ ASTEROIDS.CONFIG = {
         SCRAP_POINTS: 15,
         COLLISION_RADIUS: 2.4,
         BATTERY_CANISTER_SCALE: 6,
+        // Baked into gear_scrap.glb verts at load (InstancedMesh.scale stays 1)
+        SCRAP_GEAR_SCALE: 1.4,  // ~80% of prior 1.75
         DRIFT_SPEED: 1.8,
-        LIFETIME: 28.0
+        LIFETIME: 28.0,
+        // Seconds remaining when loot starts blinking before despawn
+        WARN_TIME: 4.0,
+        // Blink frequency (Hz) during the warning window
+        WARN_BLINK_HZ: 4.0
     },
 
     // Levels — each a different planet
