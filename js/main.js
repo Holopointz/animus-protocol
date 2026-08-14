@@ -514,6 +514,7 @@ ASTEROIDS.Game = class Game {
         window.addEventListener('blur', function() {
             self._lookKeys = {};
             self._mouseLook = false;
+            self._lastMouse = null;
             if (self._controlsHeld) {
                 self._controlsHeld = false;
                 self.hud.hideControls();
@@ -525,6 +526,50 @@ ASTEROIDS.Game = class Game {
                 self.hud.hideControls();
             }
         });
+
+        // Click-drag free-look on the game canvas (was missing after input rewrites).
+        // Only active while playing; uses VISUAL.CAMERA_MOUSE_SENS and yaw/pitch clamps.
+        var canvas = (this.renderer && this.renderer.domElement) ? this.renderer.domElement : null;
+        if (canvas) {
+            canvas.style.touchAction = 'none';
+            canvas.addEventListener('mousedown', function(e) {
+                if (self.state !== 'playing') return;
+                if (e.button !== 0 && e.button !== 2) return; // LMB or RMB
+                self._mouseLook = true;
+                self._lastMouse = { x: e.clientX, y: e.clientY };
+                e.preventDefault();
+            });
+            window.addEventListener('mousemove', function(e) {
+                if (!self._mouseLook || !self._lastMouse) return;
+                if (self.state !== 'playing') {
+                    self._mouseLook = false;
+                    self._lastMouse = null;
+                    return;
+                }
+                var sens = (vis && typeof vis.CAMERA_MOUSE_SENS === 'number')
+                    ? vis.CAMERA_MOUSE_SENS : 0.0022;
+                var dx = e.clientX - self._lastMouse.x;
+                var dy = e.clientY - self._lastMouse.y;
+                self._lastMouse = { x: e.clientX, y: e.clientY };
+
+                // Drag right → look right; drag up → look up
+                self.lookYaw -= dx * sens;
+                self.lookPitch += dy * sens;
+
+                var yawMax = (vis && vis.CAMERA_LOOK_YAW_MAX) || 1.15;
+                var pitchMax = (vis && vis.CAMERA_LOOK_PITCH_MAX) || 0.75;
+                self.lookYaw = Math.max(-yawMax, Math.min(yawMax, self.lookYaw));
+                self.lookPitch = Math.max(-pitchMax, Math.min(pitchMax, self.lookPitch));
+            });
+            window.addEventListener('mouseup', function() {
+                self._mouseLook = false;
+                self._lastMouse = null;
+            });
+            // Don't let the browser context menu steal RMB drag
+            canvas.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+            });
+        }
     }
 
     beginPlay() {
